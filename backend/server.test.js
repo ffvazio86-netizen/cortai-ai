@@ -4,10 +4,21 @@ const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
-const { app } = require("./server");
+const { app, isCutDurationValid } = require("./server");
 const uploadDirectory = path.resolve(
   process.env.CORTAI_STORAGE_DIR || path.join(os.tmpdir(), "cortai-ai-uploads")
 );
+
+
+test("generated cut duration must match the requested duration within tolerance", () => {
+  assert.equal(isCutDurationValid(10, 10), true);
+  assert.equal(isCutDurationValid(9.8, 10), true);
+  assert.equal(isCutDurationValid(10.2, 10), true);
+  assert.equal(isCutDurationValid(9.7, 10), false);
+  assert.equal(isCutDurationValid(10.3, 10), false);
+  assert.equal(isCutDurationValid(0, 10), false);
+  assert.equal(isCutDurationValid(Number.NaN, 10), false);
+});
 
 async function startServer(t) {
   const server = app.listen(0, "127.0.0.1");
