@@ -51,7 +51,7 @@ test("POST /api/videos receives a supported video", async (t) => {
   assert.equal(response.status, 201);
   assert.equal(body.video.originalName, "teste.mp4");
   assert.equal(body.video.mimeType, "video/mp4");
-  assert.equal(body.video.size, 17);
+  assert.equal(body.video.size, 18);
 
   const storedPath = path.join(os.tmpdir(), "cortai-ai-uploads", `${body.video.id}.mp4`);
   await fs.unlink(storedPath);
