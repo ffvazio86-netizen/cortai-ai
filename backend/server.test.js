@@ -4,6 +4,7 @@ const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
+const { validateSourceUrl } = require("./services/source-downloader");
 process.env.AUTH_REQUIRED = "0";
 process.env.CORTAI_ALLOWED_ORIGIN = "https://frontend.example.test";
 const { app, isCutDurationValid, parseIntegerSetting } = require("./server");
@@ -11,6 +12,28 @@ const uploadDirectory = path.resolve(
   process.env.CORTAI_STORAGE_DIR || path.join(os.tmpdir(), "cortai-ai-uploads")
 );
 
+
+test("source links allow only HTTPS YouTube and Twitch URLs", () => {
+  assert.equal(validateSourceUrl("https://www.youtube.com/watch?v=abc123").startsWith("https://"), true);
+  assert.equal(validateSourceUrl("https://youtu.be/abc123").startsWith("https://"), true);
+  assert.equal(validateSourceUrl("https://www.twitch.tv/videos/123").startsWith("https://"), true);
+  assert.throws(() => validateSourceUrl("http://youtube.com/watch?v=abc"), { code: "INVALID_SOURCE_URL" });
+  assert.throws(() => validateSourceUrl("https://youtube.com.evil.example/watch?v=abc"), { code: "INVALID_SOURCE_URL" });
+  assert.throws(() => validateSourceUrl("https://user:pass@youtube.com/watch?v=abc"), { code: "INVALID_SOURCE_URL" });
+  assert.throws(() => validateSourceUrl("https://127.0.0.1/private"), { code: "INVALID_SOURCE_URL" });
+});
+
+test("POST /api/videos/from-url rejects untrusted source links before downloading", async (t) => {
+  const baseUrl = await startServer(t);
+  const response = await fetch(`${baseUrl}/api/videos/from-url`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ url: "https://youtube.com.evil.example/watch?v=abc" })
+  });
+  const body = await response.json();
+  assert.equal(response.status, 400);
+  assert.equal(body.error, "INVALID_SOURCE_URL");
+});
 
 test("generated cut duration must match the requested duration within tolerance", () => {
   assert.equal(isCutDurationValid(10, 10), true);
