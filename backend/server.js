@@ -13,7 +13,9 @@ const app = express();
 app.disable("x-powered-by");
 app.use(express.json({ limit: "100kb" }));
 
-const uploadDirectory = path.join(os.tmpdir(), "cortai-ai-uploads");
+const uploadDirectory = path.resolve(
+  process.env.CORTAI_STORAGE_DIR || path.join(os.tmpdir(), "cortai-ai-uploads")
+);
 fs.mkdirSync(uploadDirectory, { recursive: true });
 
 const allowedVideoTypes = new Map([
