@@ -10,6 +10,7 @@ const { probeVideo } = require("./services/video-validation");
 const { generateVideoCut } = require("./services/video-cut");
 const { findUploadedVideo, UUID_PATTERN } = require("./services/video-files");
 const { cleanupExpiredFiles, getStorageUsage } = require("./services/video-storage");
+const auth = require("./auth");
 
 const app = express();
 app.disable("x-powered-by");
@@ -121,6 +122,8 @@ const videoUpload = multer({
   }
 });
 
+auth.registerRoutes(app, rateLimit);
+
 app.get("/", (_req, res) => {
   res.sendFile(path.join(__dirname, "..", "index.html"));
 });
@@ -135,7 +138,7 @@ app.get("/api/health", async (_req, res) => {
   });
 });
 
-app.post("/api/videos", uploadRateLimit, async (req, res, next) => {
+app.post("/api/videos", auth.authenticate, uploadRateLimit, async (req, res, next) => {
   try {
     await cleanupStorage();
     const currentUsage = await getStorageUsage(uploadDirectory);
@@ -179,10 +182,17 @@ app.post("/api/videos", uploadRateLimit, async (req, res, next) => {
         });
       }
 
+      const videoId = path.basename(req.file.filename, path.extname(req.file.filename));
+      try {
+        auth.recordResource(req.user?.id, videoId, "video");
+      } catch (ownershipError) {
+        await fs.promises.unlink(req.file.path).catch(() => {});
+        return next(ownershipError);
+      }
       return res.status(201).json({
         message: "Vídeo válido recebido para a próxima etapa de processamento.",
         video: {
-          id: path.basename(req.file.filename, path.extname(req.file.filename)),
+          id: videoId,
           originalName: path.basename(req.file.originalname),
           size: req.file.size,
           mimeType: req.file.mimetype,
@@ -196,13 +206,22 @@ app.post("/api/videos", uploadRateLimit, async (req, res, next) => {
   });
 });
 
-app.post("/api/videos/:videoId/cuts", cutRateLimit, async (req, res) => {
+app.post("/api/videos/:videoId/cuts", auth.authenticate, cutRateLimit, async (req, res) => {
   const { videoId } = req.params;
   if (!UUID_PATTERN.test(videoId)) {
     return res.status(400).json({
       error: "invalid_video_id",
       message: "O ID do vídeo é inválido."
     });
+  }
+
+  try {
+    if (!auth.ownsResource(req.user?.id, videoId, "video")) {
+      return res.status(404).json({ error: "video_not_found", message: "Vídeo não encontrado." });
+    }
+  } catch (error) {
+    console.error("Falha ao verificar propriedade do vídeo:", error.message);
+    return res.status(503).json({ error: "auth_storage_unavailable", message: "Não foi possível verificar a propriedade do vídeo." });
   }
 
   const { startSeconds, durationSeconds } = req.body || {};
@@ -280,6 +299,12 @@ app.post("/api/videos/:videoId/cuts", cutRateLimit, async (req, res) => {
           code: "CUT_DURATION_MISMATCH"
         });
       }
+      try {
+        auth.recordResource(req.user?.id, cutId, "cut");
+      } catch (ownershipError) {
+        await fs.promises.unlink(outputPath).catch(() => {});
+        throw ownershipError;
+      }
       return res.status(201).json({
         message: "Corte gerado com sucesso.",
         cut: {
@@ -326,13 +351,22 @@ app.post("/api/videos/:videoId/cuts", cutRateLimit, async (req, res) => {
   }
 });
 
-app.get("/api/cuts/:cutId/download", async (req, res) => {
+app.get("/api/cuts/:cutId/download", auth.authenticate, async (req, res) => {
   const { cutId } = req.params;
   if (!UUID_PATTERN.test(cutId)) {
     return res.status(400).json({
       error: "invalid_cut_id",
       message: "O ID do corte é inválido."
     });
+  }
+
+  try {
+    if (!auth.ownsResource(req.user?.id, cutId, "cut")) {
+      return res.status(404).json({ error: "cut_not_found", message: "Corte não encontrado." });
+    }
+  } catch (error) {
+    console.error("Falha ao verificar propriedade do corte:", error.message);
+    return res.status(503).json({ error: "auth_storage_unavailable", message: "Não foi possível verificar a propriedade do corte." });
   }
 
   const cutPath = path.join(uploadDirectory, `${cutId}.mp4`);
