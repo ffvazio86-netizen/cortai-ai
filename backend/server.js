@@ -45,10 +45,12 @@ const uploadDirectory = path.resolve(
 fs.mkdirSync(uploadDirectory, { recursive: true });
 
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
+const MAX_CUT_BYTES = 100 * 1024 * 1024;
 const maxStorageBytes = Math.max(100, Number.parseInt(process.env.CORTAI_MAX_STORAGE_MB || "500", 10)) * 1024 * 1024;
 const fileTtlHours = Math.max(1, Number.parseInt(process.env.CORTAI_FILE_TTL_HOURS || "2", 10));
 const fileTtlMs = fileTtlHours * 60 * 60 * 1000;
 let pendingUploadBytes = 0;
+let pendingCutBytes = 0;
 
 async function cleanupStorage() {
   const removed = await cleanupExpiredFiles(uploadDirectory, fileTtlMs);
@@ -110,7 +112,7 @@ app.post("/api/videos", uploadRateLimit, async (req, res, next) => {
     const currentUsage = await getStorageUsage(uploadDirectory);
     // Reserve the maximum upload size before Multer writes the file, avoiding
     // concurrent requests exceeding the configured quota.
-    if (currentUsage + pendingUploadBytes + MAX_UPLOAD_BYTES > maxStorageBytes) {
+    if (currentUsage + pendingUploadBytes + pendingCutBytes + MAX_UPLOAD_BYTES > maxStorageBytes) {
       return res.status(507).json({
         error: "storage_limit_reached",
         message: "O armazenamento temporário está cheio. Tente novamente mais tarde."
@@ -191,7 +193,19 @@ app.post("/api/videos/:videoId/cuts", cutRateLimit, async (req, res) => {
   }
 
   let inputPath;
+  let cutReservation = false;
   try {
+    await cleanupStorage();
+    const currentUsage = await getStorageUsage(uploadDirectory);
+    if (currentUsage + pendingUploadBytes + pendingCutBytes + MAX_CUT_BYTES > maxStorageBytes) {
+      return res.status(507).json({
+        error: "storage_limit_reached",
+        message: "Não há espaço temporário suficiente para gerar outro corte."
+      });
+    }
+    pendingCutBytes += MAX_CUT_BYTES;
+    cutReservation = true;
+
     inputPath = await findUploadedVideo(uploadDirectory, videoId);
     if (!inputPath) {
       return res.status(404).json({
@@ -223,7 +237,11 @@ app.post("/api/videos/:videoId/cuts", cutRateLimit, async (req, res) => {
     const cutId = randomUUID();
     const outputPath = path.join(uploadDirectory, `${cutId}.mp4`);
     try {
-      await generateVideoCut(inputPath, outputPath, startSeconds, durationSeconds);
+      await generateVideoCut(inputPath, outputPath, startSeconds, durationSeconds, 60000, MAX_CUT_BYTES);
+      const outputStats = await fs.promises.stat(outputPath);
+      if (outputStats.size > MAX_CUT_BYTES) {
+        throw Object.assign(new Error("Generated cut exceeded the reserved storage size."), { code: "CUT_SIZE_LIMIT" });
+      }
       const output = await probeVideo(outputPath);
       if (!output.valid) {
         throw Object.assign(new Error("Generated cut failed validation."), { code: "FFMPEG_CUT_FAILED" });
@@ -247,6 +265,12 @@ app.post("/api/videos/:videoId/cuts", cutRateLimit, async (req, res) => {
           message: "A geração do corte excedeu o tempo limite."
         });
       }
+      if (error.code === "CUT_SIZE_LIMIT") {
+        return res.status(507).json({
+          error: "storage_limit_reached",
+          message: "O corte excedeu o limite de armazenamento permitido."
+        });
+      }
       if (error.code === "FFMPEG_CUT_FAILED" || error.code === "ENOENT") {
         return res.status(422).json({
           error: "cut_failed",
@@ -261,6 +285,10 @@ app.post("/api/videos/:videoId/cuts", cutRateLimit, async (req, res) => {
       error: "internal_server_error",
       message: "Ocorreu um erro interno ao gerar o corte."
     });
+  } finally {
+    if (cutReservation) {
+      pendingCutBytes = Math.max(0, pendingCutBytes - MAX_CUT_BYTES);
+    }
   }
 });
 
