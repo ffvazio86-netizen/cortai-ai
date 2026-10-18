@@ -1,5 +1,9 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs/promises");
+const os = require("node:os");
+const path = require("node:path");
+const { spawnSync } = require("node:child_process");
 const { app } = require("./server");
 
 async function startServer(t) {
@@ -32,6 +36,32 @@ test("unknown routes return JSON 404", async (t) => {
 
   assert.equal(response.status, 404);
   assert.equal(body.error, "not_found");
+});
+
+test("POST /api/videos accepts a real video and returns its duration", async (t) => {
+  const fixtureDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "cortai-fixture-"));
+  const fixturePath = path.join(fixtureDirectory, "valid.mp4");
+  const generated = spawnSync("ffmpeg", [
+    "-hide_banner", "-loglevel", "error", "-f", "lavfi",
+    "-i", "color=c=black:s=64x64:d=1",
+    "-frames:v", "10", "-c:v", "mpeg4", "-y", fixturePath
+  ]);
+  assert.equal(generated.status, 0, generated.stderr.toString());
+  t.after(() => fs.rm(fixtureDirectory, { recursive: true, force: true }));
+
+  const baseUrl = await startServer(t);
+  const form = new FormData();
+  form.append("video", new Blob([await fs.readFile(fixturePath)], { type: "video/mp4" }), "valid.mp4");
+
+  const response = await fetch(`${baseUrl}/api/videos`, { method: "POST", body: form });
+  const body = await response.json();
+
+  assert.equal(response.status, 201);
+  assert.equal(body.video.originalName, "valid.mp4");
+  assert.equal(body.video.mimeType, "video/mp4");
+  assert.ok(body.video.durationSeconds > 0);
+
+  await fs.unlink(path.join(os.tmpdir(), "cortai-ai-uploads", `${body.video.id}.mp4`));
 });
 
 test("POST /api/videos rejects a fake video file", async (t) => {
