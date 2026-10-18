@@ -272,8 +272,8 @@ function registerRoutes(app, rateLimit) {
     if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return res.status(400).json({ error: "invalid_email", message: "Informe um e-mail válido." });
     }
-    if (password.length < 12 || password.length > 128) {
-      return res.status(400).json({ error: "invalid_password", message: "A senha deve ter entre 12 e 128 caracteres." });
+    if (password.length < 1 || password.length > 128) {
+      return res.status(400).json({ error: "invalid_password", message: "Informe uma senha com até 128 caracteres." });
     }
     try {
       const id = crypto.randomUUID();
