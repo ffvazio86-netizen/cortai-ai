@@ -37,6 +37,14 @@ Por padrão, os arquivos ficam em uma pasta temporária do sistema operacional e
 
 Não envie vídeos privados ou sensíveis para uma instância pública: autenticação e autorização ainda não estão implementadas. Antes de produção, também é necessário configurar limites de uso e proteção contra abuso.
 
+## Proteção básica contra abuso
+
+- Uploads: até 10 requisições por IP em 15 minutos.
+- Geração de cortes: até 20 requisições por IP em 15 minutos.
+- O Express confia em proxy reverso somente quando `TRUST_PROXY=1`. Em Render, configure essa variável como `1` se o serviço estiver atrás do proxy único padrão da plataforma; localmente, deixe `0`.
+- O limitador usa memória do processo. Em múltiplas instâncias, os contadores não são compartilhados; para produção com escala, use um armazenamento compartilhado de rate limit.
+- Os limites por IP não substituem autenticação, limites de custo ou proteção de concorrência de processamento.
+
 ## Testes
 
 ```bash
