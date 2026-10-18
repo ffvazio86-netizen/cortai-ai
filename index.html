@@ -65,13 +65,13 @@
 <div class="empty" id="empty"><div class="big">🎬</div><strong>Seu corte aparecerá aqui.</strong><br>Selecione um arquivo de vídeo para enviar ao backend e gerar um corte real.</div>
 <div class="cards" id="cards" hidden></div>
 </section>
-<div class="notice"><strong>Importante:</strong> esta página envia o arquivo ao backend configurado e gera um corte real com FFmpeg. O backend precisa estar acessível no mesmo domínio ou configurado em <code>window.CORTAI_API_URL</code>. Os arquivos são temporários; use apenas vídeos que você tenha direito de processar. Legendas, detecção automática de melhores momentos e cortes verticais ainda não estão disponíveis.</div>
+<div class="notice"><strong>Importante:</strong> esta página envia o arquivo ao backend e gera um corte real com FFmpeg. Por padrão, usa <code>https://cortai-ai-backend.onrender.com</code>; se necessário, a URL pode ser sobrescrita por <code>window.CORTAI_API_URL</code>. Os arquivos são temporários; use apenas vídeos que você tenha direito de processar. Legendas automáticas, detecção de melhores momentos e cortes verticais ainda não estão disponíveis.</div>
 <footer>Cortaí AI · Projeto inicial responsivo para celular</footer>
 </div>
 <div class="toast" id="toast"></div>
 <script>
 const $=id=>document.getElementById(id);
-const API_BASE=(window.CORTAI_API_URL||'').replace(/\/$/,'');
+const API_BASE=(window.CORTAI_API_URL||'https://cortai-ai-backend.onrender.com').replace(/\/$/,'');
 let authUser=null;
 function authMessage(message,isError=false){
  const el=$('authStatus');el.textContent=message;el.className='status show';el.style.borderColor=isError?'#b91c1c':'';
