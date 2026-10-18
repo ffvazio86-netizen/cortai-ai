@@ -306,12 +306,14 @@ app.post("/api/videos/from-url", auth.authenticate, uploadRateLimit, async (req,
     await downloadSourceVideo({ url: sourceUrl, outputPath });
     const validation = await probeVideo(outputPath);
     if (validation.unavailable) {
+      await fs.promises.unlink(outputPath).catch(() => {});
       return res.status(503).json({
         error: "video_validation_unavailable",
         message: "A validação de vídeo está indisponível neste servidor."
       });
     }
     if (!validation.valid || validation.duration <= 299) {
+      await fs.promises.unlink(outputPath).catch(() => {});
       return res.status(422).json({
         error: "invalid_source_video",
         message: "Escolha um vídeo público válido com mais de 5 minutos."
