@@ -11,6 +11,7 @@ COPY package*.json ./
 RUN npm install --omit=dev
 
 COPY backend ./backend
+COPY index.html ./index.html
 
 EXPOSE 3000
 CMD ["npm", "start"]
