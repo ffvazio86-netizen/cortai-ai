@@ -202,8 +202,8 @@ test("POST /api/videos/:videoId/cuts generates a real downloadable MP4 cut", asy
   const fixturePath = path.join(fixtureDirectory, "source.mp4");
   const generated = spawnSync("ffmpeg", [
     "-hide_banner", "-loglevel", "error", "-f", "lavfi",
-    "-i", "color=c=black:s=64x64:d=2",
-    "-frames:v", "20", "-c:v", "mpeg4", "-y", fixturePath
+    "-i", "color=c=black:s=64x64:d=62",
+    "-frames:v", "620", "-c:v", "mpeg4", "-y", fixturePath
   ]);
   assert.equal(generated.status, 0, generated.stderr.toString());
   t.after(() => fs.rm(fixtureDirectory, { recursive: true, force: true }));
@@ -218,7 +218,7 @@ test("POST /api/videos/:videoId/cuts generates a real downloadable MP4 cut", asy
   const cutResponse = await fetch(`${baseUrl}/api/videos/${uploaded.video.id}/cuts`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ startSeconds: 0, durationSeconds: 0.5 })
+    body: JSON.stringify({ startSeconds: 0, durationSeconds: 61 })
   });
   const cutBody = await cutResponse.json();
   assert.equal(cutResponse.status, 201);
@@ -261,7 +261,7 @@ test("POST /api/videos/:videoId/cuts refuses to exceed the storage quota", async
     {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ startSeconds: 0, durationSeconds: 1 })
+      body: JSON.stringify({ startSeconds: 0, durationSeconds: 61 })
     }
   );
   const body = await response.json();
