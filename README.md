@@ -46,20 +46,42 @@ A autenticação por e-mail/senha e Google está habilitada por padrão. As rota
 5. Confirme que a aplicação usa Node.js 22 ou superior para o banco SQLite nativo.
 6. Antes de disponibilizar o serviço, teste cadastro, login, logout, login Google, upload, geração e download em uma instância de homologação. Não use `AUTH_REQUIRED=0` em produção.
 
-A autenticação não envia senhas nem tokens Google ao banco em texto claro: senhas são derivadas com scrypt e tokens de sessão são armazenados como hashes.\n\n## Preparar armazenamento persistente no Render (sem publicar)
+A autenticação não envia senhas nem tokens Google ao banco em texto claro: senhas são derivadas com scrypt e tokens de sessão são armazenados como hashes.
 
-Se a interface e a API forem hospedadas em origens diferentes, configure `CORTAI_ALLOWED_ORIGIN` com a origem exata da interface (HTTPS em produção). O backend só permite CORS com credenciais para essa origem e a interface envia cookies nas requisições. Para esse cenário, configure também `CORTAI_PUBLIC_ORIGIN` com a origem pública da interface para a validação dos pedidos; cookies cross-site em produção usam `SameSite=None; Secure`. Se interface e API estiverem na mesma origem, não é necessário configurar `CORTAI_ALLOWED_ORIGIN`.
+## Preparar armazenamento persistente no Render (sem publicar)
+
+Se a interface e a API forem hospedadas em origens diferentes, configure `CORTAI_ALLOWED_ORIGIN` com a origem exata da página da interface (esquema + domínio + porta, sem caminho; HTTPS em produção). Não coloque aí a URL da API. O backend só permite CORS com credenciais para essa origem e a interface envia cookies nas requisições. `CORTAI_PUBLIC_ORIGIN` deve ser a origem pública canônica do serviço; com origens separadas, a validação dos pedidos usa a origem explícita de `CORTAI_ALLOWED_ORIGIN`. Em produção, quando `CORTAI_ALLOWED_ORIGIN` está configurada, o cookie usa `SameSite=None; Secure`; alguns navegadores podem bloquear cookies de terceiros, então hospedar interface e API sob o mesmo site/origem é a opção mais confiável. Se interface e API estiverem na mesma origem, não é necessário configurar `CORTAI_ALLOWED_ORIGIN`.
 
 O backend aceita a variável `CORTAI_STORAGE_DIR`, mas o armazenamento só será persistente quando o serviço tiver um disco persistente montado nesse caminho.
 
 1. No painel do Render, abra o serviço web do Cort-AI.
 2. Na configuração do serviço, adicione um **Persistent Disk** (se disponível no seu plano).
 3. Escolha um caminho de montagem, por exemplo `/var/data`.
-4. Em **Environment**, adicione `CORTAI_STORAGE_DIR=/var/data`.
-5. Se o serviço estiver atrás do proxy único padrão do Render, configure também `TRUST_PROXY=1` para que os limites por IP funcionem corretamente.
-6. Salve a configuração. Não faça deploy ainda; primeiro confirme que o disco foi criado e que o caminho de montagem corresponde exatamente à variável.
+4. Em **Environment**, configure:
+   - `CORTAI_STORAGE_DIR=/var/data`
+   - `CORTAI_DATABASE_PATH=/var/data/cortai-auth.sqlite`
+   - `CORTAI_SESSION_SECRET`: valor aleatório com pelo menos 32 bytes (gere localmente com `openssl rand -base64 48`; não o coloque no GitHub).
+   - `CORTAI_PUBLIC_ORIGIN`: origem pública canônica, com HTTPS e sem caminho.
+   - `AUTH_REQUIRED=1` (não desative a autenticação).
+   - `TRUST_PROXY=1` somente se estiver usando o proxy único padrão do Render.
+   - Se a interface estiver em outro domínio/origem, configure `CORTAI_ALLOWED_ORIGIN` com a origem exata da interface; se usar Google, configure também `GOOGLE_CLIENT_ID`.
+5. Confirme que o diretório do banco e o diretório de arquivos estão no disco persistente e são graváveis pelo processo Node.js.
+6. Salve a configuração. Não faça deploy ainda; primeiro confirme que o disco foi criado e que o caminho de montagem corresponde exatamente às variáveis. Nunca coloque segredos no repositório nem em capturas públicas.
 
 A disponibilidade, o custo e as opções de disco dependem do plano atual do Render. A pasta deve ser gravável pelo processo do Node.js. Em múltiplas instâncias, um disco local montado não substitui armazenamento compartilhado apropriado.
+
+### Checklist antes de qualquer deploy
+
+- [ ] Serviço usando Node.js 22 ou superior e o `Dockerfile` (que instala FFmpeg), ou FFmpeg/ffprobe instalados por outro método.
+- [ ] Disco persistente criado e montado em `/var/data` (ou caminho escolhido).
+- [ ] `CORTAI_STORAGE_DIR` e `CORTAI_DATABASE_PATH` apontam para o disco persistente.
+- [ ] `CORTAI_SESSION_SECRET` configurado no painel com valor aleatório de pelo menos 32 bytes.
+- [ ] `CORTAI_PUBLIC_ORIGIN` e, quando necessário, `CORTAI_ALLOWED_ORIGIN` conferidos caractere por caractere.
+- [ ] `AUTH_REQUIRED=1`; nenhum segredo foi commitado no Git.
+- [ ] Testes de cadastro, login/logout, upload, geração e download concluídos em homologação.
+- [ ] Plano de backup do SQLite e política de retenção dos vídeos definidos.
+
+Esta lista é preparação, não autorização para publicar. Nenhuma configuração do painel Render foi alterada por este trabalho.
 
 ## Proteção básica contra abuso
 
