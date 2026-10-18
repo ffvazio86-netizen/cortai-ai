@@ -45,6 +45,10 @@ const videoUpload = multer({
   }
 });
 
+app.get("/", (_req, res) => {
+  res.sendFile(path.join(__dirname, "..", "index.html"));
+});
+
 app.get("/api/health", async (_req, res) => {
   const ffmpeg = await getFfmpegInfo();
   res.status(200).json({
