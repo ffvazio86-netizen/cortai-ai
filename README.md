@@ -37,6 +37,19 @@ Por padrão, os arquivos ficam em uma pasta temporária do sistema operacional e
 
 Não envie vídeos privados ou sensíveis para uma instância pública: autenticação e autorização ainda não estão implementadas. Antes de produção, também é necessário configurar limites de uso e proteção contra abuso.
 
+## Preparar armazenamento persistente no Render (sem publicar)
+
+O backend aceita a variável `CORTAI_STORAGE_DIR`, mas o armazenamento só será persistente quando o serviço tiver um disco persistente montado nesse caminho.
+
+1. No painel do Render, abra o serviço web do Cort-AI.
+2. Na configuração do serviço, adicione um **Persistent Disk** (se disponível no seu plano).
+3. Escolha um caminho de montagem, por exemplo `/var/data`.
+4. Em **Environment**, adicione `CORTAI_STORAGE_DIR=/var/data`.
+5. Se o serviço estiver atrás do proxy único padrão do Render, configure também `TRUST_PROXY=1` para que os limites por IP funcionem corretamente.
+6. Salve a configuração. Não faça deploy ainda; primeiro confirme que o disco foi criado e que o caminho de montagem corresponde exatamente à variável.
+
+A disponibilidade, o custo e as opções de disco dependem do plano atual do Render. A pasta deve ser gravável pelo processo do Node.js. Em múltiplas instâncias, um disco local montado não substitui armazenamento compartilhado apropriado.
+
 ## Proteção básica contra abuso
 
 - Uploads: até 10 requisições por IP em 15 minutos.
