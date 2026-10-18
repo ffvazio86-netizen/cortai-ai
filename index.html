@@ -62,6 +62,10 @@
 <div class="cards" id="cards" hidden></div>
 </section>
 <div class="notice"><strong>Importante:</strong> use apenas vídeos que você tenha direito de processar. A transcrição e a análise por IA precisam de <code>OPENAI_API_KEY</code> configurada no backend. O acesso direto a vídeos por link ainda precisa de integração autorizada; os arquivos são temporários na configuração padrão. Cortes verticais e legendas automáticas ainda não estão disponíveis. A análise por link do YouTube ou Twitch depende de uma integração autorizada com a plataforma de origem.</div>
+<section class="results" id="resultsPanel" hidden>
+<div class="results-top"><div><h2>Seus cortes</h2><p>Selecionados automaticamente pela IA</p></div><span class="count" id="cutCount">0 cortes</span></div>
+<div class="cards" id="cards"></div>
+</section>
 <footer>Cortaí AI · Projeto inicial responsivo para celular</footer>
 </div>
 <div class="toast" id="toast"></div>
@@ -143,10 +147,8 @@ async function setupGoogleSignIn(){
 }
 refreshAuth();setupGoogleSignIn();
 function showStatus(message,isError=false){const s=$('status');s.className='status show';s.textContent=message;s.style.borderColor=isError?'#b91c1c':'';}
-let currentVideo=null;
-let currentSuggestions=[];
-function showSuggestionStatus(message,isError=false){
- const el=$('suggestionStatus');el.textContent=message;el.className='status show';el.style.borderColor=isError?'#b91c1c':'';
+function showStatus(message,isError=false){
+ const s=$('status');s.className='status show';s.textContent=message;s.style.borderColor=isError?'#b91c1c':'';
 }
 async function apiJson(path,options={}){
  const response=await fetch(API_BASE+path,{credentials:'include',...options});
@@ -156,41 +158,41 @@ async function apiJson(path,options={}){
 }
 $('generate').addEventListener('click',async()=>{
  const raw=$('sourceUrl').value.trim();
- let parsed;
- try { parsed=new URL(raw); } catch { showStatus('Cole um link válido do YouTube ou Twitch.',true); $('sourceUrl').focus(); return; }
- const host=parsed.hostname.toLowerCase().replace(/^www\./,'');
- const youtube=host==='youtube.com'||host==='m.youtube.com'||host==='youtu.be';
- const twitch=host==='twitch.tv'||host==='m.twitch.tv'||host==='clips.twitch.tv';
- if(parsed.protocol!=='https:'||(!youtube&&!twitch)){
-  showStatus('Use um link HTTPS do YouTube ou Twitch.',true);return;
- }
- const button=$('generate');button.disabled=true;button.style.opacity='.65';
- try {
-  showStatus('O link foi validado. A integração autorizada para obter o vídeo ainda precisa ser configurada no backend; nenhum vídeo foi baixado nem processado.');
- } finally { button.disabled=false;button.style.opacity='1'; }
-});
-$('createSelected').addEventListener('click',async()=>{
- if(!currentVideo||!currentSuggestions.length){showSuggestionStatus('Analise um vídeo antes de gerar cortes.',true);return;}
- const selected=[...$('suggestionsList').querySelectorAll('input[data-suggestion-index]:checked')].map(el=>currentSuggestions[Number(el.dataset.suggestionIndex)]).filter(Boolean);
- if(!selected.length){showSuggestionStatus('Marque pelo menos um momento.',true);return;}
- const button=$('createSelected');button.disabled=true;button.style.opacity='.65';
- const cuts=[];
+ if(!raw){showStatus('Cole o link do YouTube ou Twitch.',true);$('sourceUrl').focus();return;}
+ const button=$('generate');
+ button.disabled=true;button.style.opacity='.65';
+ $('resultsPanel').hidden=true;$('cards').innerHTML='';
  try{
-  for(let i=0;i<selected.length;i++){
-   const item=selected[i];
-   showSuggestionStatus('Gerando corte '+(i+1)+' de '+selected.length+' com FFmpeg…');
-   const result=await apiJson('/api/videos/'+encodeURIComponent(currentVideo.id)+'/cuts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({startSeconds:item.startSeconds,durationSeconds:item.durationSeconds})});
+  showStatus('Etapa 1 de 4: obtendo o vídeo. Isso pode levar alguns minutos…');
+  const source=await apiJson('/api/videos/from-url',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:raw})});
+  const video=source.video;
+  showStatus('Etapa 2 de 4: transcrevendo o áudio com IA…');
+  const transcript=await apiJson('/api/videos/'+encodeURIComponent(video.id)+'/transcribe',{method:'POST'});
+  showStatus('Etapa 3 de 4: a IA está escolhendo os melhores momentos…');
+  const analysis=await apiJson('/api/ai/suggest-highlights',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({videoDurationSeconds:transcript.videoDurationSeconds,transcriptSegments:transcript.transcriptSegments})});
+  if(!Array.isArray(analysis.cuts)||analysis.cuts.length===0)throw new Error('A IA não encontrou cortes adequados nesse vídeo. Tente outro.');
+  const cuts=[];
+  for(let i=0;i<analysis.cuts.length;i++){
+   const item=analysis.cuts[i];
+   showStatus('Etapa 4 de 4: gerando corte '+(i+1)+' de '+analysis.cuts.length+'…');
+   const result=await apiJson('/api/videos/'+encodeURIComponent(video.id)+'/cuts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({startSeconds:item.startSeconds,durationSeconds:item.durationSeconds})});
    cuts.push({...result.cut,title:item.title,reason:item.reason});
   }
   const escapeHtml=value=>String(value).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-  $('cards').innerHTML=cuts.map((cut,i)=>'<article class="clip"><video class="video-player" controls playsinline preload="metadata" src="'+API_BASE+cut.streamUrl+'"></video><div class="clipbody"><div class="clipnum">MELHOR MOMENTO '+(i+1)+'</div><h3>'+escapeHtml(cut.title||currentVideo.name)+'</h3><div class="meta"><span>MP4 real</span><span>'+Math.round(cut.durationSeconds/60*10)/10+' minutos</span><span>Início: '+Math.floor(cut.startSeconds/60)+':'+String(Math.floor(cut.startSeconds%60)).padStart(2,'0')+'</span></div><p style="font-size:12px;color:var(--muted)">'+escapeHtml(cut.reason||'')+'</p><div class="clipactions"><button type="button" data-cut-id="'+cut.id+'" data-download-url="'+cut.downloadUrl+'">Baixar corte MP4</button></div></div></article>').join('');
-  $('cards').hidden=false;$('empty').hidden=true;
-  $('cards').querySelectorAll('[data-cut-id]').forEach(button=>button.addEventListener('click',async()=>{
-   try{const response=await fetch(API_BASE+button.dataset.downloadUrl,{credentials:'include'});if(!response.ok)throw new Error('Falha ao baixar o corte.');const blob=await response.blob();const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='cortai-cut-'+button.dataset.cutId+'.mp4';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
-   catch(e){showSuggestionStatus(e.message,true);}
+  $('cards').innerHTML=cuts.map((cut,i)=>'<article class="clip"><video class="video-player" controls playsinline preload="metadata" src="'+API_BASE+cut.streamUrl+'"></video><div class="clipbody"><div class="clipnum">MELHOR MOMENTO '+(i+1)+'</div><h3>'+escapeHtml(cut.title||'Melhor momento')+'</h3><div class="meta"><span>MP4 real</span><span>'+Math.round(cut.durationSeconds/60*10)/10+' min</span><span>Início: '+Math.floor(cut.startSeconds/60)+':'+String(Math.floor(cut.startSeconds%60)).padStart(2,'0')+'</span></div><p style="font-size:12px;color:var(--muted)">'+escapeHtml(cut.reason||'')+'</p><div class="clipactions"><button type="button" data-cut-id="'+cut.id+'" data-download-url="'+cut.downloadUrl+'">Baixar corte MP4</button></div></div></article>').join('');
+  $('cutCount').textContent=cuts.length+' cortes';
+  $('resultsPanel').hidden=false;
+  $('cards').querySelectorAll('[data-cut-id]').forEach(downloadButton=>downloadButton.addEventListener('click',async()=>{
+   try{
+    const response=await fetch(API_BASE+downloadButton.dataset.downloadUrl,{credentials:'include'});
+    if(!response.ok)throw new Error('Falha ao baixar o corte.');
+    const blob=await response.blob();
+    const anchor=document.createElement('a');anchor.href=URL.createObjectURL(blob);anchor.download='cortai-cut-'+downloadButton.dataset.cutId+'.mp4';
+    document.body.appendChild(anchor);anchor.click();anchor.remove();setTimeout(()=>URL.revokeObjectURL(anchor.href),1000);
+   }catch(error){showStatus(error.message,true);}
   }));
-  showSuggestionStatus('Pronto! Os cortes selecionados foram gerados. Você pode assistir ou baixar cada MP4.');
- }catch(error){showSuggestionStatus(error.message,true);}
+  showStatus('Pronto! '+cuts.length+' cortes foram gerados. Você pode assistir ou baixar cada MP4.');
+ }catch(error){showStatus(error.message||'Não foi possível processar esse link.',true);}
  finally{button.disabled=false;button.style.opacity='1';}
 });
 </script>
