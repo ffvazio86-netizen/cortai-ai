@@ -38,7 +38,7 @@ test("GET / serves the responsive Cort-AI frontend", async (t) => {
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type"), /text\/html/);
   assert.match(body, /name="viewport"/);
-  assert.match(body, /Cortaí AI/);
+  assert.match(body, /Cortaí AI/);\n  assert.match(body, /gere um corte MP4 de até 60 segundos/i);\n  assert.doesNotMatch(body, /prepare 3 cortes verticais/i);
 });
 
 test("GET /api/health returns backend and FFmpeg status", async (t) => {
@@ -172,7 +172,7 @@ test("POST /api/videos/:videoId/cuts generates a real downloadable MP4 cut", asy
 });
 
 test("POST /api/videos/:videoId/cuts refuses to exceed the storage quota", async (t) => {
-  const maxStorageMb = Math.max(100, Number.parseInt(process.env.CORTAI_MAX_STORAGE_MB || "500", 10));
+  const maxStorageMb = parseIntegerSetting(process.env.CORTAI_MAX_STORAGE_MB, 500, 100, 102400, "CORTAI_MAX_STORAGE_MB");
   const quotaFillPath = path.join(uploadDirectory, "cortai-quota-test.mp4");
   const handle = await fs.open(quotaFillPath, "w");
   try {
