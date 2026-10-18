@@ -11,6 +11,7 @@ const { generateVideoCut } = require("./services/video-cut");
 const { findUploadedVideo, UUID_PATTERN } = require("./services/video-files");
 const { suggestHighlights } = require("./services/ai-highlight-suggestions");
 const { transcribeAudio } = require("./services/audio-transcription");
+const { downloadSourceVideo, validateSourceUrl, MAX_SOURCE_BYTES } = require("./services/source-downloader");
 const { cleanupExpiredFiles, getStorageUsage } = require("./services/video-storage");
 const auth = require("./auth");
 
@@ -279,6 +280,84 @@ app.post("/api/videos/:videoId/transcribe", auth.authenticate, aiRateLimit, asyn
   }
 });
 
+app.post("/api/videos/from-url", auth.authenticate, uploadRateLimit, async (req, res) => {
+  let sourceUrl;
+  try {
+    sourceUrl = validateSourceUrl(req.body?.url);
+  } catch (error) {
+    return res.status(400).json({ error: error.code || "invalid_source_url", message: error.message });
+  }
+
+  const videoId = randomUUID();
+  const outputPath = path.join(uploadDirectory, `${videoId}.mp4`);
+  let reserved = false;
+  try {
+    await cleanupStorage();
+    const currentUsage = await getStorageUsage(uploadDirectory);
+    if (currentUsage + pendingUploadBytes + pendingCutBytes + MAX_UPLOAD_BYTES > maxStorageBytes) {
+      return res.status(507).json({
+        error: "storage_limit_reached",
+        message: "O armazenamento temporário está cheio. Tente novamente mais tarde."
+      });
+    }
+    pendingUploadBytes += MAX_UPLOAD_BYTES;
+    reserved = true;
+
+    await downloadSourceVideo({ url: sourceUrl, outputPath });
+    const validation = await probeVideo(outputPath);
+    if (validation.unavailable) {
+      return res.status(503).json({
+        error: "video_validation_unavailable",
+        message: "A validação de vídeo está indisponível neste servidor."
+      });
+    }
+    if (!validation.valid || validation.duration <= 299) {
+      return res.status(422).json({
+        error: "invalid_source_video",
+        message: "Escolha um vídeo público válido com mais de 5 minutos."
+      });
+    }
+    const stats = await fs.promises.stat(outputPath);
+    if (stats.size > MAX_SOURCE_BYTES) {
+      return res.status(413).json({ error: "source_size_limit", message: "O vídeo ultrapassa o limite de 100 MB." });
+    }
+    auth.recordResource(req.user?.id, videoId, "video");
+    return res.status(201).json({
+      message: "Vídeo obtido. Pronto para transcrição e análise.",
+      video: {
+        id: videoId,
+        originalName: "video-fonte.mp4",
+        size: stats.size,
+        mimeType: "video/mp4",
+        durationSeconds: validation.duration,
+        sourceUrl
+      }
+    });
+  } catch (error) {
+    await fs.promises.unlink(outputPath).catch(() => {});
+    if (error.code === "SOURCE_DOWNLOADER_UNAVAILABLE") {
+      return res.status(503).json({ error: error.code, message: error.message });
+    }
+    if (error.code === "SOURCE_DOWNLOAD_TIMEOUT") {
+      return res.status(504).json({ error: error.code, message: error.message });
+    }
+    if (error.code === "SOURCE_SIZE_LIMIT") {
+      return res.status(413).json({ error: error.code, message: error.message });
+    }
+    if (error.code === "SOURCE_DOWNLOAD_FAILED") {
+      console.warn("Falha ao obter vídeo da origem:", error.details || error.message);
+      return res.status(422).json({ error: error.code, message: error.message });
+    }
+    if (error.code === "AUTH_NOT_CONFIGURED" || error.code === "AUTH_STORAGE_UNAVAILABLE") {
+      return res.status(503).json({ error: "auth_storage_unavailable", message: "Não foi possível associar o vídeo à conta." });
+    }
+    console.error("Falha no processamento do link:", error.message);
+    return res.status(500).json({ error: "source_processing_failed", message: "Não foi possível preparar esse vídeo agora." });
+  } finally {
+    if (reserved) pendingUploadBytes = Math.max(0, pendingUploadBytes - MAX_UPLOAD_BYTES);
+  }
+});
+
 app.post("/api/videos", auth.authenticate, uploadRateLimit, async (req, res, next) => {
   try {
     await cleanupStorage();
@@ -372,12 +451,12 @@ app.post("/api/videos/:videoId/cuts", auth.authenticate, cutRateLimit, async (re
     typeof durationSeconds !== "number" ||
     !Number.isFinite(durationSeconds) ||
     startSeconds < 0 ||
-    durationSeconds <= 0 ||
+    durationSeconds < 61 ||
     durationSeconds > 299
   ) {
     return res.status(400).json({
       error: "invalid_cut_parameters",
-      message: "Informe startSeconds >= 0 e durationSeconds entre 0 e 299 segundos."
+      message: "Informe startSeconds >= 0 e durationSeconds entre 61 e 299 segundos."
     });
   }
 
