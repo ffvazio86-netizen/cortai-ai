@@ -56,7 +56,7 @@ function database() {
 }
 
 function hashToken(token) {
-  return crypto.createHash("sha256").update(token).digest("hex");
+  return crypto.createHmac("sha256", process.env.CORTAI_SESSION_SECRET).update(token).digest("hex");
 }
 
 function parseCookies(header = "") {
