@@ -101,7 +101,8 @@ test("GET / serves the responsive Cort-AI frontend", async (t) => {
   assert.match(body, /A IA escolherá automaticamente os melhores momentos/i);
   assert.doesNotMatch(body, /id="videoFile"/);
   assert.doesNotMatch(body, /id="suggestionsPanel"/);
-  assert.match(body, /integração autorizada/i);
+  assert.match(body, /api\/videos\/from-url/);
+  assert.match(body, /Etapa 1 de 4/);
   assert.match(body, /https:\/\/cortai-ai-backend\.onrender\.com/);
   assert.match(body, /window\.CORTAI_API_URL/);
 });
