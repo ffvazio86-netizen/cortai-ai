@@ -11,6 +11,16 @@ const SESSION_SECONDS = 7 * 24 * 60 * 60;
 const AUTH_REQUIRED = process.env.AUTH_REQUIRED !== "0";
 let db;
 
+if (process.env.NODE_ENV === "production" && !process.env.CORTAI_STORAGE_DIR) {
+  console.warn("Cort-AI: CORTAI_STORAGE_DIR não está definido em produção; vídeos e o banco de autenticação podem ser perdidos ao reiniciar.");
+}
+if (process.env.NODE_ENV === "production" && !process.env.CORTAI_DATABASE_PATH) {
+  console.warn("Cort-AI: defina CORTAI_DATABASE_PATH explicitamente em um disco persistente em produção.");
+}
+if (process.env.NODE_ENV === "production" && !process.env.CORTAI_PUBLIC_ORIGIN) {
+  console.warn("Cort-AI: defina CORTAI_PUBLIC_ORIGIN com a origem HTTPS pública para validar origens de autenticação.");
+}
+
 function configured() {
   return typeof process.env.CORTAI_SESSION_SECRET === "string" &&
     Buffer.byteLength(process.env.CORTAI_SESSION_SECRET) >= 32;
