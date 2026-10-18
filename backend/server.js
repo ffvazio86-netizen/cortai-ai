@@ -16,6 +16,36 @@ const app = express();
 app.disable("x-powered-by");
 // Configure TRUST_PROXY=1 only when deployed behind Render's single proxy.
 app.set("trust proxy", process.env.TRUST_PROXY === "1" ? 1 : false);
+// Cross-origin frontend access is opt-in and restricted to one exact origin.
+function corsForConfiguredFrontend(req, res, next) {
+  const origin = req.get("origin");
+  const configuredOrigin = process.env.CORTAI_ALLOWED_ORIGIN || process.env.CORTAI_PUBLIC_ORIGIN;
+  if (!origin) {
+    if (req.method === "OPTIONS") return res.status(403).json({ error: "origin_not_allowed" });
+    return next();
+  }
+  let allowedOrigin;
+  try {
+    allowedOrigin = configuredOrigin ? new URL(configuredOrigin).origin : null;
+  } catch {
+    return res.status(500).json({ error: "cors_origin_misconfigured" });
+  }
+  if (!allowedOrigin || origin !== allowedOrigin) {
+    if (req.method === "OPTIONS") return res.status(403).json({ error: "origin_not_allowed" });
+    return next();
+  }
+  res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  res.setHeader("Vary", "Origin");
+  if (req.method === "OPTIONS") {
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    res.setHeader("Access-Control-Max-Age", "600");
+    return res.status(204).end();
+  }
+  return next();
+}
+app.use(corsForConfiguredFrontend);
 app.use(express.json({ limit: "100kb" }));
 
 const uploadRateLimit = rateLimit({
