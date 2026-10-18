@@ -5,6 +5,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 process.env.AUTH_REQUIRED = "0";
+process.env.CORTAI_ALLOWED_ORIGIN = "https://frontend.example.test";
 const { app, isCutDurationValid, parseIntegerSetting } = require("./server");
 const uploadDirectory = path.resolve(
   process.env.CORTAI_STORAGE_DIR || path.join(os.tmpdir(), "cortai-ai-uploads")
@@ -30,6 +31,33 @@ async function startServer(t) {
   t.after(() => new Promise((resolve) => server.close(resolve)));
   return `http://127.0.0.1:${server.address().port}`;
 }
+
+
+test("CORS allows credentialed requests only from the configured frontend origin", async (t) => {
+  const baseUrl = await startServer(t);
+  const allowed = await fetch(`${baseUrl}/api/auth/me`, {
+    method: "OPTIONS",
+    headers: {
+      origin: "https://frontend.example.test",
+      "access-control-request-method": "POST",
+      "access-control-request-headers": "content-type"
+    }
+  });
+  assert.equal(allowed.status, 204);
+  assert.equal(allowed.headers.get("access-control-allow-origin"), "https://frontend.example.test");
+  assert.equal(allowed.headers.get("access-control-allow-credentials"), "true");
+  assert.match(allowed.headers.get("access-control-allow-methods"), /POST/);
+
+  const denied = await fetch(`${baseUrl}/api/auth/me`, {
+    method: "OPTIONS",
+    headers: {
+      origin: "https://attacker.example.test",
+      "access-control-request-method": "POST"
+    }
+  });
+  assert.equal(denied.status, 403);
+  assert.equal(denied.headers.get("access-control-allow-origin"), null);
+});
 
 test("GET / serves the responsive Cort-AI frontend", async (t) => {
   const baseUrl = await startServer(t);
