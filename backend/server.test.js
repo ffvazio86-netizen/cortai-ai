@@ -105,3 +105,62 @@ test("POST /api/videos requires a file", async (t) => {
   assert.equal(response.status, 400);
   assert.equal(body.error, "video_required");
 });
+
+
+test("POST /api/videos/:videoId/cuts generates a real downloadable MP4 cut", async (t) => {
+  const fixtureDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "cortai-cut-fixture-"));
+  const fixturePath = path.join(fixtureDirectory, "source.mp4");
+  const generated = spawnSync("ffmpeg", [
+    "-hide_banner", "-loglevel", "error", "-f", "lavfi",
+    "-i", "color=c=black:s=64x64:d=2",
+    "-frames:v", "20", "-c:v", "mpeg4", "-y", fixturePath
+  ]);
+  assert.equal(generated.status, 0, generated.stderr.toString());
+  t.after(() => fs.rm(fixtureDirectory, { recursive: true, force: true }));
+
+  const baseUrl = await startServer(t);
+  const form = new FormData();
+  form.append("video", new Blob([await fs.readFile(fixturePath)], { type: "video/mp4" }), "source.mp4");
+  const uploadResponse = await fetch(`${baseUrl}/api/videos`, { method: "POST", body: form });
+  const uploaded = await uploadResponse.json();
+  assert.equal(uploadResponse.status, 201);
+
+  const cutResponse = await fetch(`${baseUrl}/api/videos/${uploaded.video.id}/cuts`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ startSeconds: 0, durationSeconds: 0.5 })
+  });
+  const cutBody = await cutResponse.json();
+  assert.equal(cutResponse.status, 201);
+  assert.equal(cutBody.cut.videoId, uploaded.video.id);
+  assert.equal(cutBody.cut.format, "mp4");
+  assert.ok(cutBody.cut.durationSeconds > 0);
+
+  const downloadResponse = await fetch(`${baseUrl}${cutBody.cut.downloadUrl}`);
+  assert.equal(downloadResponse.status, 200);
+  assert.match(downloadResponse.headers.get("content-type"), /video\/mp4/);
+  const downloaded = Buffer.from(await downloadResponse.arrayBuffer());
+  assert.ok(downloaded.length > 100);
+  const outputPath = path.join(os.tmpdir(), "cortai-ai-uploads", `${cutBody.cut.id}.mp4`);
+  await fs.unlink(outputPath);
+  await fs.unlink(path.join(os.tmpdir(), "cortai-ai-uploads", `${uploaded.video.id}.mp4`));
+});
+
+test("POST /api/videos/:videoId/cuts rejects invalid parameters", async (t) => {
+  const baseUrl = await startServer(t);
+  const response = await fetch(`${baseUrl}/api/videos/123e4567-e89b-42d3-a456-426614174000/cuts`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ startSeconds: -1, durationSeconds: 90 })
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(body.error, "invalid_cut_parameters");
+});
+
+test("GET /api/cuts/:cutId/download rejects malformed IDs", async (t) => {
+  const baseUrl = await startServer(t);
+  const response = await fetch(`${baseUrl}/api/cuts/../../package.json/download`);
+  assert.ok([400, 404].includes(response.status));
+});
