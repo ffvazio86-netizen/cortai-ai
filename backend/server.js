@@ -46,6 +46,14 @@ fs.mkdirSync(uploadDirectory, { recursive: true });
 
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 const MAX_CUT_BYTES = 100 * 1024 * 1024;
+
+const CUT_DURATION_TOLERANCE_SECONDS = 0.25;
+
+function isCutDurationValid(actualDuration, requestedDuration) {
+  return Number.isFinite(actualDuration) && actualDuration > 0 &&
+    actualDuration >= requestedDuration - CUT_DURATION_TOLERANCE_SECONDS &&
+    actualDuration <= requestedDuration + CUT_DURATION_TOLERANCE_SECONDS;
+}
 const maxStorageBytes = Math.max(100, Number.parseInt(process.env.CORTAI_MAX_STORAGE_MB || "500", 10)) * 1024 * 1024;
 const fileTtlHours = Math.max(1, Number.parseInt(process.env.CORTAI_FILE_TTL_HOURS || "2", 10));
 const fileTtlMs = fileTtlHours * 60 * 60 * 1000;
@@ -246,6 +254,11 @@ app.post("/api/videos/:videoId/cuts", cutRateLimit, async (req, res) => {
       if (!output.valid) {
         throw Object.assign(new Error("Generated cut failed validation."), { code: "FFMPEG_CUT_FAILED" });
       }
+      if (!isCutDurationValid(output.duration, durationSeconds)) {
+        throw Object.assign(new Error("Generated cut duration does not match the requested duration."), {
+          code: "CUT_DURATION_MISMATCH"
+        });
+      }
       return res.status(201).json({
         message: "Corte gerado com sucesso.",
         cut: {
@@ -271,7 +284,7 @@ app.post("/api/videos/:videoId/cuts", cutRateLimit, async (req, res) => {
           message: "O corte excedeu o limite de armazenamento permitido."
         });
       }
-      if (error.code === "FFMPEG_CUT_FAILED" || error.code === "ENOENT") {
+      if (error.code === "FFMPEG_CUT_FAILED" || error.code === "CUT_DURATION_MISMATCH" || error.code === "ENOENT") {
         return res.status(422).json({
           error: "cut_failed",
           message: "Não foi possível gerar o corte. Verifique se o FFmpeg está disponível."
@@ -356,4 +369,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { app };
+module.exports = { app, isCutDurationValid };
