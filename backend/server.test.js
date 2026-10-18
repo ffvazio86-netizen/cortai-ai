@@ -1,8 +1,5 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const fs = require("node:fs/promises");
-const os = require("node:os");
-const path = require("node:path");
 const { app } = require("./server");
 
 async function startServer(t) {
@@ -37,7 +34,7 @@ test("unknown routes return JSON 404", async (t) => {
   assert.equal(body.error, "not_found");
 });
 
-test("POST /api/videos receives a supported video", async (t) => {
+test("POST /api/videos rejects a fake video file", async (t) => {
   const baseUrl = await startServer(t);
   const form = new FormData();
   form.append("video", new Blob(["test video content"], { type: "video/mp4" }), "teste.mp4");
@@ -48,13 +45,8 @@ test("POST /api/videos receives a supported video", async (t) => {
   });
   const body = await response.json();
 
-  assert.equal(response.status, 201);
-  assert.equal(body.video.originalName, "teste.mp4");
-  assert.equal(body.video.mimeType, "video/mp4");
-  assert.equal(body.video.size, 18);
-
-  const storedPath = path.join(os.tmpdir(), "cortai-ai-uploads", `${body.video.id}.mp4`);
-  await fs.unlink(storedPath);
+  assert.equal(response.status, 422);
+  assert.equal(body.error, "invalid_video");
 });
 
 test("POST /api/videos rejects unsupported file formats", async (t) => {
