@@ -5,6 +5,7 @@ const path = require("node:path");
 const fs = require("node:fs");
 const { randomUUID } = require("node:crypto");
 const { getFfmpegInfo } = require("./services/ffmpeg");
+const { probeVideo } = require("./services/video-validation");
 
 const app = express();
 app.disable("x-powered-by");
@@ -53,7 +54,7 @@ app.get("/api/health", async (_req, res) => {
 });
 
 app.post("/api/videos", (req, res, next) => {
-  videoUpload.single("video")(req, res, (error) => {
+  videoUpload.single("video")(req, res, async (error) => {
     if (error) return next(error);
     if (!req.file) {
       return res.status(400).json({
@@ -62,15 +63,37 @@ app.post("/api/videos", (req, res, next) => {
       });
     }
 
-    return res.status(201).json({
-      message: "Vídeo recebido para a próxima etapa de processamento.",
-      video: {
-        id: path.basename(req.file.filename, path.extname(req.file.filename)),
-        originalName: path.basename(req.file.originalname),
-        size: req.file.size,
-        mimeType: req.file.mimetype
+    try {
+      const validation = await probeVideo(req.file.path);
+      if (validation.unavailable) {
+        await fs.promises.unlink(req.file.path).catch(() => {});
+        return res.status(503).json({
+          error: "video_validation_unavailable",
+          message: "A validação de vídeo está indisponível neste servidor."
+        });
       }
-    });
+      if (!validation.valid) {
+        await fs.promises.unlink(req.file.path).catch(() => {});
+        return res.status(422).json({
+          error: "invalid_video",
+          message: "O arquivo não contém um vídeo válido ou está corrompido."
+        });
+      }
+
+      return res.status(201).json({
+        message: "Vídeo válido recebido para a próxima etapa de processamento.",
+        video: {
+          id: path.basename(req.file.filename, path.extname(req.file.filename)),
+          originalName: path.basename(req.file.originalname),
+          size: req.file.size,
+          mimeType: req.file.mimetype,
+          durationSeconds: validation.duration
+        }
+      });
+    } catch (validationError) {
+      await fs.promises.unlink(req.file.path).catch(() => {});
+      return next(validationError);
+    }
   });
 });
 
