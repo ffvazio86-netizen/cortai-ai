@@ -202,7 +202,7 @@ test("POST /api/videos/:videoId/cuts generates a real downloadable MP4 cut", asy
   const fixturePath = path.join(fixtureDirectory, "source.mp4");
   const generated = spawnSync("ffmpeg", [
     "-hide_banner", "-loglevel", "error", "-f", "lavfi",
-    "-i", "color=c=black:s=64x64:d=62",
+    "-i", "color=c=black:s=64x64:d=62:r=10",
     "-frames:v", "620", "-c:v", "mpeg4", "-y", fixturePath
   ]);
   assert.equal(generated.status, 0, generated.stderr.toString());
