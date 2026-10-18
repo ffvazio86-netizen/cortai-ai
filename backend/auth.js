@@ -272,7 +272,7 @@ function registerRoutes(app, rateLimit) {
       createSession(id, res);
       return res.status(201).json({ message: "Conta criada com sucesso.", user: { id, email } });
     } catch (error) {
-      if (String(error.code).startsWith("SQLITE_CONSTRAINT")) {
+      if (String(error.message).includes("UNIQUE constraint failed: users.email")) {
         return res.status(409).json({ error: "email_already_registered", message: "Não foi possível criar a conta com esse e-mail. Se já tiver conta, entre." });
       }
       console.error("Falha no cadastro:", error.message);
