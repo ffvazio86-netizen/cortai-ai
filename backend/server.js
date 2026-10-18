@@ -1,5 +1,6 @@
 const express = require("express");
 const multer = require("multer");
+const { rateLimit } = require("express-rate-limit");
 const os = require("node:os");
 const path = require("node:path");
 const fs = require("node:fs");
@@ -11,7 +12,31 @@ const { findUploadedVideo, UUID_PATTERN } = require("./services/video-files");
 
 const app = express();
 app.disable("x-powered-by");
+// Configure TRUST_PROXY=1 only when deployed behind Render's single proxy.
+app.set("trust proxy", process.env.TRUST_PROXY === "1" ? 1 : false);
 app.use(express.json({ limit: "100kb" }));
+
+const uploadRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: {
+    error: "upload_rate_limit",
+    message: "Limite de envios atingido. Tente novamente em 15 minutos."
+  }
+});
+
+const cutRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: {
+    error: "cut_rate_limit",
+    message: "Limite de cortes atingido. Tente novamente em 15 minutos."
+  }
+});
 
 const uploadDirectory = path.resolve(
   process.env.CORTAI_STORAGE_DIR || path.join(os.tmpdir(), "cortai-ai-uploads")
@@ -61,7 +86,7 @@ app.get("/api/health", async (_req, res) => {
   });
 });
 
-app.post("/api/videos", (req, res, next) => {
+app.post("/api/videos", uploadRateLimit, (req, res, next) => {
   videoUpload.single("video")(req, res, async (error) => {
     if (error) return next(error);
     if (!req.file) {
@@ -105,7 +130,7 @@ app.post("/api/videos", (req, res, next) => {
   });
 });
 
-app.post("/api/videos/:videoId/cuts", async (req, res) => {
+app.post("/api/videos/:videoId/cuts", cutRateLimit, async (req, res) => {
   const { videoId } = req.params;
   if (!UUID_PATTERN.test(videoId)) {
     return res.status(400).json({
