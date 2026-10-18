@@ -1,0 +1,19 @@
+{
+  "name": "cortai-ai",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Backend inicial do Cort-AI para testes locais com Node.js, Express e FFmpeg.",
+  "main": "backend/server.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node backend/server.js",
+    "dev": "node --watch backend/server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}
