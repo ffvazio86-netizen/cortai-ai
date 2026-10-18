@@ -19,7 +19,7 @@
 <body>
 <div class="wrap">
 <nav class="nav"><div class="brand"><div class="logo">✂</div>Cortaí <span class="gradient">AI</span></div><span class="pill">● Feito para celular</span></nav>
-<header class="hero"><div class="eyebrow">✦ GERAÇÃO DE CORTES COM FFMPEG</div><h1>Transforme vídeos em <span class="gradient">cortes virais.</span></h1><p>Envie um vídeo do seu computador. A IA transcreve o áudio, sugere os melhores momentos e permite gerar cortes de 1 a quase 5 minutos.</p></header>
+<header class="hero"><div class="eyebrow">✦ GERAÇÃO DE CORTES COM FFMPEG</div><h1>Transforme vídeos em <span class="gradient">cortes virais.</span></h1><p>Cole um link do YouTube ou Twitch. A IA identifica os melhores momentos e escolhe automaticamente a duração de cada corte, entre 1 e 5 minutos.</p></header>
 <section class="panel" id="authPanel">
 <div class="head"><span class="step">00</span> Entre ou crie sua conta</div>
 <p class="fine" style="margin-top:0">Seus vídeos e cortes ficam associados à sua conta.</p>
@@ -48,31 +48,20 @@
 <div class="opts"><p id="accountEmail" style="margin:0;overflow-wrap:anywhere"></p><button type="button" id="logoutButton">Sair</button></div>
 </section>
 <section class="panel" id="appPanel" hidden>
-<div class="head"><span class="step">01</span> Envie um vídeo para analisar</div>
-<label class="label" for="videoFile">Arquivo de vídeo (MP4, MOV, WebM ou MKV — até 100 MB)</label>
-<div class="inputrow"><input id="videoFile" class="url" type="file" accept="video/mp4,video/quicktime,video/webm,video/x-matroska"></div>
-<div class="opts">
-<div><label class="label">Como funciona</label><p style="color:var(--muted);font-size:13px;line-height:1.5;margin:0">A IA analisa a transcrição e encontra trechos de 61 a 299 segundos. Depois você escolhe quais quer gerar.</p></div>
-<div><label class="label">Formato</label><p style="color:var(--muted);font-size:13px;line-height:1.5;margin:0">Os arquivos são MP4. O enquadramento vertical e as legendas automáticas ainda não estão disponíveis.</p></div>
-</div>
-
-<button class="generate" id="generate">✦ Analisar vídeo e encontrar melhores momentos</button>
-<p class="fine">A análise usa transcrição por IA e exige uma chave OpenAI configurada no backend.</p>
-<div class="status" id="status" role="status"></div>
-</section>
-<section class="panel" id="suggestionsPanel" hidden style="margin-top:20px">
-<div class="head"><span class="step">02</span> Escolha os melhores momentos</div>
-<p class="fine" style="text-align:left;margin:0 0 12px">Marque os trechos que deseja transformar em arquivos MP4.</p>
-<div id="suggestionsList"></div>
-<button class="generate" id="createSelected" type="button">Gerar cortes selecionados</button>
-<div class="status" id="suggestionStatus" role="status"></div>
+<div class="head"><span class="step">01</span> Cole o link do vídeo</div>
+<label class="label" for="sourceUrl">Link do YouTube ou Twitch</label>
+<input id="sourceUrl" class="url" type="url" inputmode="url" autocomplete="url" maxlength="2048" placeholder="https://www.youtube.com/watch?v=..." aria-describedby="sourceHelp">
+<p class="fine" id="sourceHelp" style="text-align:left">A IA escolherá automaticamente os melhores momentos, com cortes maiores que 1 minuto e menores que 5 minutos. Você não precisa definir a duração.</p>
+<button class="generate" id="generate" type="button">✦ Encontrar e gerar os melhores cortes</button>
+<p class="fine">A análise depende de acesso autorizado ao vídeo na plataforma de origem e da chave OpenAI configurada no backend.</p>
+<div class="status" id="status" role="status" aria-live="polite"></div>
 </section>
 <section class="results">
-<div class="results-top"><div><h2>Seus cortes</h2><p>3 arquivos MP4 reais, com reprodução e download</p></div><span class="count">3 CORTES</span></div>
-<div class="empty" id="empty"><div class="big">🎬</div><strong>Seu corte aparecerá aqui.</strong><br>Selecione um arquivo de vídeo para enviar ao backend e gerar três cortes reais.</div>
+<div class="results-top"><div><h2>Seus cortes</h2><p>Cortes gerados pela IA, com reprodução e download</p></div><span class="count">CORTES AUTOMÁTICOS</span></div>
+<div class="empty" id="empty"><div class="big">🎬</div><strong>Seu corte aparecerá aqui.</strong><br>Cole um link compatível para começar a análise dos melhores momentos.</div>
 <div class="cards" id="cards" hidden></div>
 </section>
-<div class="notice"><strong>Importante:</strong> use apenas vídeos que você tenha direito de processar. A transcrição e a análise por IA precisam de <code>OPENAI_API_KEY</code> configurada no backend. Os arquivos são temporários na configuração padrão; cortes verticais e legendas automáticas ainda não estão disponíveis. A página não importa vídeos por link do YouTube ou Twitch.</div>
+<div class="notice"><strong>Importante:</strong> use apenas vídeos que você tenha direito de processar. A transcrição e a análise por IA precisam de <code>OPENAI_API_KEY</code> configurada no backend. O acesso direto a vídeos por link ainda precisa de integração autorizada; os arquivos são temporários na configuração padrão. Cortes verticais e legendas automáticas ainda não estão disponíveis. A análise por link do YouTube ou Twitch depende de uma integração autorizada com a plataforma de origem.</div>
 <footer>Cortaí AI · Projeto inicial responsivo para celular</footer>
 </div>
 <div class="toast" id="toast"></div>
@@ -166,31 +155,19 @@ async function apiJson(path,options={}){
  return data;
 }
 $('generate').addEventListener('click',async()=>{
- const file=$('videoFile').files[0];
- if(!file){$('videoFile').focus();showStatus('Selecione um arquivo de vídeo primeiro.',true);return;}
- if(file.size>100*1024*1024){showStatus('O arquivo ultrapassa o limite de 100 MB.',true);return;}
+ const raw=$('sourceUrl').value.trim();
+ let parsed;
+ try { parsed=new URL(raw); } catch { showStatus('Cole um link válido do YouTube ou Twitch.',true); $('sourceUrl').focus(); return; }
+ const host=parsed.hostname.toLowerCase().replace(/^www\./,'');
+ const youtube=host==='youtube.com'||host==='m.youtube.com'||host==='youtu.be';
+ const twitch=host==='twitch.tv'||host==='m.twitch.tv'||host==='clips.twitch.tv';
+ if(parsed.protocol!=='https:'||(!youtube&&!twitch)){
+  showStatus('Use um link HTTPS do YouTube ou Twitch.',true);return;
+ }
  const button=$('generate');button.disabled=true;button.style.opacity='.65';
- $('suggestionsPanel').hidden=true;$('cards').hidden=true;$('empty').hidden=false;
- currentVideo=null;currentSuggestions=[];
- try{
-  showStatus('Enviando vídeo ao backend…');
-  const form=new FormData();form.append('video',file);
-  const uploaded=await apiJson('/api/videos',{method:'POST',body:form});
-  currentVideo={id:uploaded.video.id,name:file.name,duration:Number(uploaded.video.durationSeconds)};
-  if(!Number.isFinite(currentVideo.duration)||currentVideo.duration<=299)throw new Error('Este vídeo precisa ter mais de 5 minutos para encontrar cortes de 1 a 5 minutos.');
-  showStatus('Vídeo recebido. Transcrevendo o áudio com IA; isso pode levar alguns minutos…');
-  const transcript=await apiJson('/api/videos/'+encodeURIComponent(currentVideo.id)+'/transcribe',{method:'POST'});
-  showStatus('Transcrição concluída. Procurando os melhores momentos…');
-  const analysis=await apiJson('/api/ai/suggest-highlights',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({videoDurationSeconds:transcript.videoDurationSeconds,transcriptSegments:transcript.transcriptSegments})});
-  currentSuggestions=analysis.cuts||[];
-  if(!currentSuggestions.length)throw new Error('A IA não encontrou momentos para sugerir neste vídeo.');
-  const escapeHtml=value=>String(value).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-  $('suggestionsList').innerHTML=currentSuggestions.map((cut,i)=>'<label style="display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:12px;padding:12px;margin:9px 0;cursor:pointer"><input type="checkbox" data-suggestion-index="'+i+'" checked style="accent-color:#a78bfa;width:18px;height:18px;flex-shrink:0;margin-top:3px"><span><strong>'+escapeHtml(cut.title)+'</strong><br><span style="color:var(--muted);font-size:12px">De '+Math.floor(cut.startSeconds/60)+':'+String(Math.floor(cut.startSeconds%60)).padStart(2,'0')+' até '+Math.floor(cut.endSeconds/60)+':'+String(Math.floor(cut.endSeconds%60)).padStart(2,'0')+' · '+Math.round(cut.durationSeconds/60*10)/10+' min</span><br><span style="color:#d8d7e6;font-size:13px">'+escapeHtml(cut.reason||'Momento selecionado pela IA')+'</span></span></label>').join('');
-  $('suggestionsPanel').hidden=false;
-  showStatus('Análise concluída! Marque os momentos que deseja gerar.');
-  $('suggestionsPanel').scrollIntoView({behavior:'smooth',block:'start'});
- }catch(error){showStatus(error.message+' Confira a configuração da OpenAI e se o backend está acessível.',true);}
- finally{button.disabled=false;button.style.opacity='1';}
+ try {
+  showStatus('O link foi validado. A integração autorizada para obter o vídeo ainda precisa ser configurada no backend; nenhum vídeo foi baixado nem processado.');
+ } finally { button.disabled=false;button.style.opacity='1'; }
 });
 $('createSelected').addEventListener('click',async()=>{
  if(!currentVideo||!currentSuggestions.length){showSuggestionStatus('Analise um vídeo antes de gerar cortes.',true);return;}
