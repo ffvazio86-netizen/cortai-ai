@@ -33,7 +33,9 @@ Exemplo de corpo para gerar um corte de 15 segundos a partir do segundo 10:
 }
 ```
 
-Os arquivos ficam em uma pasta temporária do sistema operacional. Eles não são armazenamento permanente e podem desaparecer quando o ambiente for reiniciado ou limpar arquivos temporários. Não envie vídeos privados ou sensíveis para uma instância sem autenticação: autenticação e autorização ainda não estão implementadas.
+Por padrão, os arquivos ficam em uma pasta temporária do sistema operacional e podem desaparecer após reinícios ou limpeza. Para escolher outra pasta, configure `CORTAI_STORAGE_DIR` antes de iniciar o servidor. Em uma hospedagem como Render, essa variável deve apontar para o caminho de montagem de um disco persistente configurado no próprio serviço (por exemplo, `/var/data`, se esse for o caminho escolhido). Configurar a variável, sozinho, **não cria** o disco nem garante persistência.
+
+Não envie vídeos privados ou sensíveis para uma instância pública: autenticação e autorização ainda não estão implementadas. Antes de produção, também é necessário configurar limites de uso e proteção contra abuso.
 
 ## Testes
 
