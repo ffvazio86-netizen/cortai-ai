@@ -9,6 +9,7 @@ const { getFfmpegInfo } = require("./services/ffmpeg");
 const { probeVideo } = require("./services/video-validation");
 const { generateVideoCut } = require("./services/video-cut");
 const { findUploadedVideo, UUID_PATTERN } = require("./services/video-files");
+const { suggestHighlights } = require("./services/ai-highlight-suggestions");
 const { cleanupExpiredFiles, getStorageUsage } = require("./services/video-storage");
 const auth = require("./auth");
 
@@ -58,6 +59,17 @@ const uploadRateLimit = rateLimit({
   message: {
     error: "upload_rate_limit",
     message: "Limite de envios atingido. Tente novamente em 15 minutos."
+  }
+});
+
+const aiRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: {
+    error: "ai_rate_limit",
+    message: "Limite de análises de IA atingido. Tente novamente em 15 minutos."
   }
 });
 
@@ -168,6 +180,51 @@ app.get("/api/health", async (_req, res) => {
     timestamp: new Date().toISOString(),
     ffmpeg
   });
+});
+
+app.post("/api/ai/suggest-highlights", auth.authenticate, aiRateLimit, async (req, res) => {
+  const { videoDurationSeconds, transcriptSegments } = req.body || {};
+  if (!Number.isFinite(videoDurationSeconds) || !Array.isArray(transcriptSegments)) {
+    return res.status(400).json({
+      error: "invalid_ai_input",
+      message: "Informe videoDurationSeconds e transcriptSegments válidos."
+    });
+  }
+
+  try {
+    const cuts = await suggestHighlights({
+      durationSeconds: videoDurationSeconds,
+      segments: transcriptSegments
+    });
+    return res.status(200).json({
+      message: "Sugestões de melhores momentos geradas.",
+      cuts
+    });
+  } catch (error) {
+    if (error.code === "AI_NOT_CONFIGURED") {
+      return res.status(503).json({
+        error: error.code,
+        message: "A IA ainda não está configurada no backend."
+      });
+    }
+    if (["INVALID_VIDEO_DURATION", "INVALID_TRANSCRIPT", "TRANSCRIPT_TOO_LONG"].includes(error.code)) {
+      return res.status(400).json({ error: error.code, message: error.message });
+    }
+    if (error.code === "AI_RATE_LIMITED") {
+      return res.status(429).json({ error: error.code, message: error.message });
+    }
+    if (error.code === "AI_PROVIDER_ERROR" && error.status === 401) {
+      return res.status(503).json({
+        error: "AI_CONFIGURATION_ERROR",
+        message: "A chave ou as permissões da API OpenAI foram recusadas."
+      });
+    }
+    console.error("Falha ao sugerir melhores momentos:", error.code || "AI_ERROR");
+    return res.status(502).json({
+      error: error.code || "AI_PROVIDER_ERROR",
+      message: error.message || "Não foi possível analisar a transcrição agora."
+    });
+  }
 });
 
 app.post("/api/videos", auth.authenticate, uploadRateLimit, async (req, res, next) => {
