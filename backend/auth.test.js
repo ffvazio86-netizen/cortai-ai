@@ -4,7 +4,6 @@ const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
 
-const dataDir = fs.mkdtemp(path.join(os.tmpdir(), "cortai-auth-test-"));
 const sessionSecret = "test-only-session-secret-that-is-at-least-32-bytes";
 process.env.AUTH_REQUIRED = "1";
 process.env.CORTAI_SESSION_SECRET = sessionSecret;
