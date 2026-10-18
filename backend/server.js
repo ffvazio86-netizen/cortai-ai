@@ -31,7 +31,9 @@ function corsForConfiguredFrontend(req, res, next) {
     return res.status(500).json({ error: "cors_origin_misconfigured" });
   }
   if (!allowedOrigin || origin !== allowedOrigin) {
-    if (req.method === "OPTIONS") return res.status(403).json({ error: "origin_not_allowed" });
+    if (req.method === "OPTIONS" || configuredOrigin) {
+      return res.status(403).json({ error: "origin_not_allowed" });
+    }
     return next();
   }
   res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
