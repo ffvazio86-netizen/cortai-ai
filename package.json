@@ -6,7 +6,7 @@
   "main": "backend/server.js",
   "type": "commonjs",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
     "start": "node backend/server.js",
