@@ -46,16 +46,37 @@ fs.mkdirSync(uploadDirectory, { recursive: true });
 
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 const MAX_CUT_BYTES = 100 * 1024 * 1024;
-
 const CUT_DURATION_TOLERANCE_SECONDS = 0.25;
+
+function parseIntegerSetting(value, fallback, min, max, settingName) {
+  if (value === undefined || value === null || String(value).trim() === "") {
+    return fallback;
+  }
+
+  const parsed = Number(String(value).trim());
+  if (!Number.isSafeInteger(parsed) || parsed < min || parsed > max) {
+    console.warn(
+      `Configuração ${settingName} inválida; usando o valor padrão seguro (${fallback}).`
+    );
+    return fallback;
+  }
+
+  return parsed;
+}
 
 function isCutDurationValid(actualDuration, requestedDuration) {
   return Number.isFinite(actualDuration) && actualDuration > 0 &&
     actualDuration >= requestedDuration - CUT_DURATION_TOLERANCE_SECONDS &&
     actualDuration <= requestedDuration + CUT_DURATION_TOLERANCE_SECONDS;
 }
-const maxStorageBytes = Math.max(100, Number.parseInt(process.env.CORTAI_MAX_STORAGE_MB || "500", 10)) * 1024 * 1024;
-const fileTtlHours = Math.max(1, Number.parseInt(process.env.CORTAI_FILE_TTL_HOURS || "2", 10));
+
+const maxStorageMb = parseIntegerSetting(
+  process.env.CORTAI_MAX_STORAGE_MB, 500, 100, 102400, "CORTAI_MAX_STORAGE_MB"
+);
+const maxStorageBytes = maxStorageMb * 1024 * 1024;
+const fileTtlHours = parseIntegerSetting(
+  process.env.CORTAI_FILE_TTL_HOURS, 2, 1, 720, "CORTAI_FILE_TTL_HOURS"
+);
 const fileTtlMs = fileTtlHours * 60 * 60 * 1000;
 let pendingUploadBytes = 0;
 let pendingCutBytes = 0;
@@ -369,4 +390,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { app, isCutDurationValid };
+module.exports = { app, isCutDurationValid, parseIntegerSetting };
