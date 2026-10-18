@@ -21,50 +21,57 @@
 <nav class="nav"><div class="brand"><div class="logo">✂</div>Cortaí <span class="gradient">AI</span></div><span class="pill">● Feito para celular</span></nav>
 <header class="hero"><div class="eyebrow">✦ CORTES INTELIGENTES</div><h1>Transforme vídeos em <span class="gradient">cortes virais.</span></h1><p>Coloque o link do YouTube ou Twitch e prepare 3 cortes verticais com título chamativo e legendas, pensados para TikTok, Kwai e YouTube Shorts.</p></header>
 <section class="panel">
-<div class="head"><span class="step">01</span> Cole o link do vídeo</div>
-<div class="source"><button class="active" data-source="youtube">▶ YouTube</button><button data-source="twitch">◉ Twitch</button></div>
-<label class="label" for="videoUrl">Link do vídeo ou da live</label>
-<div class="inputrow"><input id="videoUrl" class="url" type="url" placeholder="https://www.youtube.com/watch?v=..." autocomplete="url"></div>
+<div class="head"><span class="step">01</span> Envie um vídeo do computador</div>
+<label class="label" for="videoFile">Arquivo de vídeo (MP4, MOV, WebM ou MKV — até 100 MB)</label>
+<div class="inputrow"><input id="videoFile" class="url" type="file" accept="video/mp4,video/quicktime,video/webm,video/x-matroska"></div>
 <div class="opts">
-<div><label class="label" for="duration">Duração de cada corte</label><select id="duration" class="select"><option value="1">1 minuto</option><option value="2">2 minutos</option><option value="3" selected>3 minutos</option><option value="4">4 minutos</option><option value="5">5 minutos</option></select></div>
-<div><label class="label">Formato de saída</label><div class="formats"><button class="active" data-format="9:16">9:16 vertical</button><button data-format="1080x1920">Full HD</button><button data-format="4K">4K*</button></div></div>
+<div><label class="label" for="duration">Duração de cada corte</label><select id="duration" class="select"><option value="15">15 segundos</option><option value="30" selected>30 segundos</option><option value="45">45 segundos</option><option value="60">60 segundos</option></select></div>
+<div><label class="label">Processamento</label><p style="color:var(--muted);font-size:13px;line-height:1.5;margin:0">O backend gera um corte MP4 de até 60 segundos. O formato vertical e as legendas automáticas ainda não estão implementados.</p></div>
 </div>
-<label class="checkrow"><input type="checkbox" id="captions" checked> Legendas automáticas em português</label>
-<label class="checkrow"><input type="checkbox" id="titles" checked> Título chamativo no topo do vídeo</label>
-<button class="generate" id="generate">✂ Preparar meus 3 cortes</button>
-<p class="fine">Formato vertical 9:16 · 3 vídeos · duração de 1 a 5 minutos</p>
+
+<button class="generate" id="generate">✂ Enviar vídeo e gerar corte</button>
+<p class="fine">Envio real para o backend · 1 corte MP4 · duração de 15 a 60 segundos</p>
 <div class="status" id="status" role="status"></div>
 </section>
 <section class="results">
-<div class="results-top"><div><h2>Seus cortes</h2><p>Prévia do resultado esperado</p></div><span class="count">3 VÍDEOS</span></div>
-<div class="empty" id="empty"><div class="big">🎬</div><strong>Seus melhores momentos vão aparecer aqui.</strong><br>Adicione o link acima para começar. A geração real precisa de um serviço de processamento conectado ao site.</div>
+<div class="results-top"><div><h2>Seus cortes</h2><p>Arquivo MP4 gerado pelo backend</p></div><span class="count">1 CORTE</span></div>
+<div class="empty" id="empty"><div class="big">🎬</div><strong>Seu corte aparecerá aqui.</strong><br>Selecione um arquivo de vídeo para enviar ao backend e gerar um corte real.</div>
 <div class="cards" id="cards" hidden></div>
 </section>
-<div class="notice"><strong>Importante:</strong> esta é a interface inicial do site. Um arquivo HTML sozinho não consegue baixar/analisar vídeos do YouTube ou Twitch, identificar engajamento, gerar legendas nem exportar MP4 em alta qualidade. Para isso, é necessário conectar um backend de processamento (por exemplo, FFmpeg + transcrição por IA) e hospedar o site. Use vídeos próprios ou para os quais você tenha permissão.</div>
+<div class="notice"><strong>Importante:</strong> esta página envia o arquivo ao backend configurado e gera um corte real com FFmpeg. O backend precisa estar acessível no mesmo domínio ou configurado em <code>window.CORTAI_API_URL</code>. Os arquivos são temporários; use apenas vídeos que você tenha direito de processar. Legendas, detecção automática de melhores momentos e cortes verticais ainda não estão disponíveis.</div>
 <footer>Cortaí AI · Projeto inicial responsivo para celular</footer>
 </div>
 <div class="toast" id="toast"></div>
 <script>
-let source='youtube',format='9:16';
 const $=id=>document.getElementById(id);
-document.querySelectorAll('[data-source]').forEach(b=>b.addEventListener('click',()=>{source=b.dataset.source;document.querySelectorAll('[data-source]').forEach(x=>x.classList.toggle('active',x===b));$('videoUrl').placeholder=source==='youtube'?'https://www.youtube.com/watch?v=...':'https://www.twitch.tv/videos/...';}));
-document.querySelectorAll('[data-format]').forEach(b=>b.addEventListener('click',()=>{format=b.dataset.format;document.querySelectorAll('[data-format]').forEach(x=>x.classList.toggle('active',x===b));}));
-function toast(msg){$('toast').textContent=msg;$('toast').classList.add('show');setTimeout(()=>$('toast').classList.remove('show'),2600)}
-function validUrl(s){try{let u=new URL(s);return ['http:','https:'].includes(u.protocol)&&(/youtube\.com$|\.youtube\.com$|youtu\.be$|twitch\.tv$|\.twitch\.tv$/.test(u.hostname));}catch(e){return false}}
-$('generate').addEventListener('click',()=>{
- const url=$('videoUrl').value.trim(),status=$('status');
- if(!url){$('videoUrl').focus();status.className='status show';status.textContent='Cole primeiro o link do YouTube ou Twitch no campo acima.';return}
- if(!validUrl(url)){status.className='status show';status.textContent='Esse link não parece ser do YouTube ou Twitch. Confira o endereço e tente novamente.';return}
- status.className='status show';
- status.innerHTML='<strong>Link recebido!</strong><br>Esta interface ainda não está ligada ao motor que analisa o vídeo e renderiza os MP4. Para gerar cortes verdadeiros, conecte um backend de processamento. Nenhum vídeo foi baixado ou criado nesta demonstração.';
- $('empty').hidden=true;$('cards').hidden=false;
- const duration=$('duration').value;
- const titles=['O momento que ninguém esperava 😱','A melhor reação do vídeo 😂','Você precisa ver isso! 🔥'];
- const captions=['ESSE MOMENTO FOI ABSURDO!','OLHA SÓ ESSA REAÇÃO!','VOCÊ NÃO ESTÁ PREPARADO!'];
- $('cards').innerHTML=titles.map((title,i)=>`<article class="clip"><div class="video"><div class="vtop"><span class="tag">CORTE 0${i+1}</span><span class="tag">${format==='4K'?'4K*':format==='1080x1920'?'FULL HD':'9:16'}</span></div><div class="sub">${$('captions').checked?captions[i]:''}</div><div class="vbottom"><span>Prévia ilustrativa</span><span>${duration}:00</span></div></div><div class="clipbody"><div class="clipnum">CORTE 0${i+1}</div><h3>${title}</h3><div class="meta"><span>${duration} min</span><span>Vertical 9:16</span><span>Legenda ${$('captions').checked?'ON':'OFF'}</span></div><div class="clipactions"><button type="button" class="copytitle" data-title="${title.replaceAll('&','&amp;').replaceAll('"','&quot;')}">Copiar título</button><button type="button" class="copylink">Abrir vídeo original ↗</button></div></div></article>`).join('');
- document.querySelectorAll('.copytitle').forEach(b=>b.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(b.dataset.title);toast('Título copiado!')}catch(e){toast(b.dataset.title)}}));
- document.querySelectorAll('.copylink').forEach(b=>b.addEventListener('click',()=>window.open(url,'_blank','noopener')));
- $('cards').scrollIntoView({behavior:'smooth',block:'start'});
+const API_BASE=(window.CORTAI_API_URL||'').replace(/\/$/,'');
+function showStatus(message,isError=false){const s=$('status');s.className='status show';s.textContent=message;s.style.borderColor=isError?'#b91c1c':'';}
+$('generate').addEventListener('click',async()=>{
+ const file=$('videoFile').files[0];
+ if(!file){$('videoFile').focus();showStatus('Selecione um arquivo de vídeo primeiro.',true);return;}
+ if(file.size>100*1024*1024){showStatus('O arquivo ultrapassa o limite de 100 MB.',true);return;}
+ const button=$('generate');button.disabled=true;button.style.opacity='.65';
+ $('cards').hidden=true;$('empty').hidden=false;
+ try{
+  showStatus('Enviando vídeo ao backend…');
+  const form=new FormData();form.append('video',file);
+  const uploadResponse=await fetch(API_BASE+'/api/videos',{method:'POST',body:form});
+  const uploaded=await uploadResponse.json().catch(()=>({}));
+  if(!uploadResponse.ok)throw new Error(uploaded.message||'Não foi possível enviar o vídeo ao backend.');
+  showStatus('Vídeo recebido. Gerando o corte com FFmpeg…');
+  const cutResponse=await fetch(API_BASE+'/api/videos/'+encodeURIComponent(uploaded.video.id)+'/cuts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({startSeconds:0,durationSeconds:Number($('duration').value)})});
+  const cutResult=await cutResponse.json().catch(()=>({}));
+  if(!cutResponse.ok)throw new Error(cutResult.message||'Não foi possível gerar o corte.');
+  $('empty').hidden=true;$('cards').hidden=false;
+  const safeName=file.name.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  $('cards').innerHTML='<article class="clip"><div class="video"><div class="vtop"><span class="tag">CORTE GERADO</span><span class="tag">MP4</span></div><div class="sub">SEU VÍDEO<br><span>CORT-AI</span></div><div class="vbottom"><span>Gerado pelo FFmpeg</span><span>'+Math.round(cutResult.cut.durationSeconds)+' s</span></div></div><div class="clipbody"><div class="clipnum">CORTE PRONTO</div><h3>'+safeName+'</h3><div class="meta"><span>MP4</span><span>'+Math.round(cutResult.cut.durationSeconds)+' segundos</span></div><div class="clipactions"><button type="button" id="downloadCut">Baixar corte MP4</button></div></div></article>';
+  $('downloadCut').addEventListener('click',async()=>{
+   try{const response=await fetch(API_BASE+cutResult.cut.downloadUrl);if(!response.ok)throw new Error('Falha ao baixar o corte.');const blob=await response.blob();const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='cortai-cut-'+cutResult.cut.id+'.mp4';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(a.href);}
+   catch(e){showStatus(e.message,true);}
+  });
+  showStatus('Corte gerado com sucesso! Use “Baixar corte MP4” para salvar o arquivo.');
+ }catch(error){showStatus(error.message+' Confira se o backend está ligado e acessível.',true);}
+ finally{button.disabled=false;button.style.opacity='1';}
 });
 </script>
 </body>
