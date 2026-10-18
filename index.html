@@ -37,8 +37,10 @@
 <button type="button" id="loginButton">Entrar</button>
 <button type="button" id="registerButton">Criar conta</button>
 </div>
+<div id="googleSection" hidden>
 <div style="margin:16px 0;text-align:center;color:var(--muted);font-size:12px">ou continue com Google</div>
 <div id="googleSignIn"></div>
+</div>
 <div class="status" id="authStatus" role="status"></div>
 </section>
 <section class="panel" id="accountPanel" hidden>
@@ -125,6 +127,7 @@ async function setupGoogleSignIn(){
   const response=await fetch(API_BASE+'/api/auth/config',{cache:'no-store'});
   const config=await response.json();
   if(!response.ok||!config.googleClientId)return;
+  $('googleSection').hidden=false;
   window.handleCortaiGoogleCredential=async(result)=>{
    try{
     const data=await authRequest('/api/auth/google',{credential:result.credential});
