@@ -245,6 +245,11 @@ function registerRoutes(app, rateLimit) {
     message: { error: "auth_rate_limit", message: "Muitas tentativas. Aguarde 15 minutos." }
   });
 
+  app.get("/api/auth/config", (_req, res) => {
+    res.set("Cache-Control", "no-store");
+    res.json({ googleClientId: process.env.GOOGLE_CLIENT_ID || "" });
+  });
+
   app.get("/api/auth/me", authenticate, (req, res) => {
     res.json({ authenticated: Boolean(req.user), user: req.user || null });
   });
