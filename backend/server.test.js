@@ -4,7 +4,7 @@ const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
-const { app, isCutDurationValid } = require("./server");
+const { app, isCutDurationValid, parseIntegerSetting } = require("./server");
 const uploadDirectory = path.resolve(
   process.env.CORTAI_STORAGE_DIR || path.join(os.tmpdir(), "cortai-ai-uploads")
 );
