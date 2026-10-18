@@ -48,6 +48,8 @@ A autenticação por e-mail/senha e Google está habilitada por padrão. As rota
 
 A autenticação não envia senhas nem tokens Google ao banco em texto claro: senhas são derivadas com scrypt e tokens de sessão são armazenados como hashes.\n\n## Preparar armazenamento persistente no Render (sem publicar)
 
+Se a interface e a API forem hospedadas em origens diferentes, configure `CORTAI_ALLOWED_ORIGIN` com a origem exata da interface (HTTPS em produção). O backend só permite CORS com credenciais para essa origem e a interface envia cookies nas requisições. Para esse cenário, configure também `CORTAI_PUBLIC_ORIGIN` com a origem pública da interface para a validação dos pedidos; cookies cross-site em produção usam `SameSite=None; Secure`. Se interface e API estiverem na mesma origem, não é necessário configurar `CORTAI_ALLOWED_ORIGIN`.
+
 O backend aceita a variável `CORTAI_STORAGE_DIR`, mas o armazenamento só será persistente quando o serviço tiver um disco persistente montado nesse caminho.
 
 1. No painel do Render, abra o serviço web do Cort-AI.
