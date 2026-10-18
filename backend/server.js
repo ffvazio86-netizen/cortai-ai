@@ -6,6 +6,8 @@ const fs = require("node:fs");
 const { randomUUID } = require("node:crypto");
 const { getFfmpegInfo } = require("./services/ffmpeg");
 const { probeVideo } = require("./services/video-validation");
+const { generateVideoCut } = require("./services/video-cut");
+const { findUploadedVideo, UUID_PATTERN } = require("./services/video-files");
 
 const app = express();
 app.disable("x-powered-by");
@@ -95,6 +97,126 @@ app.post("/api/videos", (req, res, next) => {
       return next(validationError);
     }
   });
+});
+
+app.post("/api/videos/:videoId/cuts", async (req, res) => {
+  const { videoId } = req.params;
+  if (!UUID_PATTERN.test(videoId)) {
+    return res.status(400).json({
+      error: "invalid_video_id",
+      message: "O ID do vídeo é inválido."
+    });
+  }
+
+  const { startSeconds, durationSeconds } = req.body || {};
+  if (
+    typeof startSeconds !== "number" ||
+    !Number.isFinite(startSeconds) ||
+    typeof durationSeconds !== "number" ||
+    !Number.isFinite(durationSeconds) ||
+    startSeconds < 0 ||
+    durationSeconds <= 0 ||
+    durationSeconds > 60
+  ) {
+    return res.status(400).json({
+      error: "invalid_cut_parameters",
+      message: "Informe startSeconds >= 0 e durationSeconds entre 0 e 60 segundos."
+    });
+  }
+
+  let inputPath;
+  try {
+    inputPath = await findUploadedVideo(uploadDirectory, videoId);
+    if (!inputPath) {
+      return res.status(404).json({
+        error: "video_not_found",
+        message: "Vídeo não encontrado. Envie o vídeo novamente antes de gerar um corte."
+      });
+    }
+
+    const source = await probeVideo(inputPath);
+    if (source.unavailable) {
+      return res.status(503).json({
+        error: "video_validation_unavailable",
+        message: "A validação de vídeo está indisponível neste servidor."
+      });
+    }
+    if (!source.valid) {
+      return res.status(422).json({
+        error: "invalid_video",
+        message: "O vídeo original não pode ser processado."
+      });
+    }
+    if (startSeconds >= source.duration || startSeconds + durationSeconds > source.duration + 0.05) {
+      return res.status(400).json({
+        error: "cut_out_of_bounds",
+        message: "O início e a duração do corte devem ficar dentro do vídeo original."
+      });
+    }
+
+    const cutId = randomUUID();
+    const outputPath = path.join(uploadDirectory, `${cutId}.mp4`);
+    try {
+      await generateVideoCut(inputPath, outputPath, startSeconds, durationSeconds);
+      const output = await probeVideo(outputPath);
+      if (!output.valid) {
+        throw Object.assign(new Error("Generated cut failed validation."), { code: "FFMPEG_CUT_FAILED" });
+      }
+      return res.status(201).json({
+        message: "Corte gerado com sucesso.",
+        cut: {
+          id: cutId,
+          videoId,
+          startSeconds,
+          durationSeconds: output.duration,
+          format: "mp4",
+          downloadUrl: `/api/cuts/${cutId}/download`
+        }
+      });
+    } catch (error) {
+      await fs.promises.unlink(outputPath).catch(() => {});
+      if (error.code === "FFMPEG_TIMEOUT") {
+        return res.status(504).json({
+          error: "cut_timeout",
+          message: "A geração do corte excedeu o tempo limite."
+        });
+      }
+      if (error.code === "FFMPEG_CUT_FAILED" || error.code === "ENOENT") {
+        return res.status(422).json({
+          error: "cut_failed",
+          message: "Não foi possível gerar o corte. Verifique se o FFmpeg está disponível."
+        });
+      }
+      throw error;
+    }
+  } catch (error) {
+    console.error("Erro ao gerar corte:", error.message);
+    return res.status(500).json({
+      error: "internal_server_error",
+      message: "Ocorreu um erro interno ao gerar o corte."
+    });
+  }
+});
+
+app.get("/api/cuts/:cutId/download", async (req, res) => {
+  const { cutId } = req.params;
+  if (!UUID_PATTERN.test(cutId)) {
+    return res.status(400).json({
+      error: "invalid_cut_id",
+      message: "O ID do corte é inválido."
+    });
+  }
+
+  const cutPath = path.join(uploadDirectory, `${cutId}.mp4`);
+  try {
+    await fs.promises.access(cutPath, fs.constants.R_OK);
+    return res.download(cutPath, `cortai-cut-${cutId}.mp4`);
+  } catch {
+    return res.status(404).json({
+      error: "cut_not_found",
+      message: "Corte não encontrado. Gere o corte novamente."
+    });
+  }
 });
 
 app.use((req, res) => {
