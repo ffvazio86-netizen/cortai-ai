@@ -4,6 +4,7 @@ function getFfmpegInfo(timeoutMs = 3000) {
   return new Promise((resolve) => {
     let settled = false;
     let output = "";
+    let timer;
 
     const finish = (result) => {
       if (settled) return;
@@ -13,16 +14,27 @@ function getFfmpegInfo(timeoutMs = 3000) {
     };
 
     let child;
+
     try {
-      child = spawn("ffmpeg", ["-version"], { stdio: ["ignore", "pipe", "pipe"] });
+      child = spawn("ffmpeg", ["-version"], {
+        stdio: ["ignore", "pipe", "pipe"]
+      });
     } catch {
-      finish({ available: false, version: null, error: "FFmpeg could not be started." });
+      finish({
+        available: false,
+        version: null,
+        error: "FFmpeg could not be started."
+      });
       return;
     }
 
-    const timer = setTimeout(() => {
+    timer = setTimeout(() => {
       child.kill("SIGKILL");
-      finish({ available: false, version: null, error: "FFmpeg check timed out." });
+      finish({
+        available: false,
+        version: null,
+        error: "FFmpeg check timed out."
+      });
     }, timeoutMs);
 
     child.stdout.on("data", (chunk) => {
@@ -45,10 +57,21 @@ function getFfmpegInfo(timeoutMs = 3000) {
 
     child.on("close", (code) => {
       if (code === 0) {
-        const firstLine = output.split(/\r?\n/).find((line) => line.startsWith("ffmpeg version"));
-        finish({ available: true, version: firstLine || "FFmpeg is installed.", error: null });
+        const firstLine = output
+          .split(/\r?\n/)
+          .find((line) => line.startsWith("ffmpeg version"));
+
+        finish({
+          available: true,
+          version: firstLine || "FFmpeg is installed.",
+          error: null
+        });
       } else {
-        finish({ available: false, version: null, error: "FFmpeg returned a non-zero exit code." });
+        finish({
+          available: false,
+          version: null,
+          error: "FFmpeg returned a non-zero exit code."
+        });
       }
     });
   });
