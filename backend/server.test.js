@@ -16,6 +16,17 @@ async function startServer(t) {
   return `http://127.0.0.1:${server.address().port}`;
 }
 
+test("GET / serves the responsive Cort-AI frontend", async (t) => {
+  const baseUrl = await startServer(t);
+  const response = await fetch(`${baseUrl}/`);
+  const body = await response.text();
+
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type"), /text\/html/);
+  assert.match(body, /name="viewport"/);
+  assert.match(body, /Cortaí AI/);
+});
+
 test("GET /api/health returns backend and FFmpeg status", async (t) => {
   const baseUrl = await startServer(t);
   const response = await fetch(`${baseUrl}/api/health`);
