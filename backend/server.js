@@ -10,6 +10,7 @@ const { probeVideo } = require("./services/video-validation");
 const { generateVideoCut } = require("./services/video-cut");
 const { findUploadedVideo, UUID_PATTERN } = require("./services/video-files");
 const { suggestHighlights } = require("./services/ai-highlight-suggestions");
+const { transcribeAudio } = require("./services/audio-transcription");
 const { cleanupExpiredFiles, getStorageUsage } = require("./services/video-storage");
 const auth = require("./auth");
 
@@ -224,6 +225,57 @@ app.post("/api/ai/suggest-highlights", auth.authenticate, aiRateLimit, async (re
       error: error.code || "AI_PROVIDER_ERROR",
       message: error.message || "Não foi possível analisar a transcrição agora."
     });
+  }
+});
+
+app.post("/api/videos/:videoId/transcribe", auth.authenticate, aiRateLimit, async (req, res) => {
+  const { videoId } = req.params;
+  if (!UUID_PATTERN.test(videoId)) {
+    return res.status(400).json({ error: "invalid_video_id", message: "O ID do vídeo é inválido." });
+  }
+  try {
+    if (!auth.ownsResource(req.user?.id, videoId, "video")) {
+      return res.status(404).json({ error: "video_not_found", message: "Vídeo não encontrado." });
+    }
+  } catch (error) {
+    console.error("Falha ao verificar propriedade do vídeo:", error.message);
+    return res.status(503).json({ error: "auth_storage_unavailable", message: "Não foi possível verificar a propriedade do vídeo." });
+  }
+
+  let inputPath;
+  const audioPath = path.join(uploadDirectory, `${randomUUID()}.mp3`);
+  try {
+    inputPath = await findUploadedVideo(uploadDirectory, videoId);
+    if (!inputPath) {
+      return res.status(404).json({ error: "video_not_found", message: "Envie o vídeo novamente antes de transcrever." });
+    }
+    const segments = await transcribeAudio({ inputPath, audioPath });
+    const source = await probeVideo(inputPath);
+    if (!source.valid) {
+      return res.status(422).json({ error: "invalid_video", message: "O vídeo original não pode ser processado." });
+    }
+    return res.status(200).json({
+      message: "Transcrição concluída.",
+      videoDurationSeconds: source.duration,
+      transcriptSegments: segments
+    });
+  } catch (error) {
+    if (error.code === "AI_NOT_CONFIGURED") {
+      return res.status(503).json({ error: error.code, message: "A IA ainda não está configurada no backend." });
+    }
+    if (["AUDIO_EXTRACTION_TIMEOUT", "AUDIO_EXTRACTION_FAILED", "NO_AUDIO_TRACK", "AUDIO_TOO_LARGE"].includes(error.code)) {
+      return res.status(error.code === "AUDIO_EXTRACTION_TIMEOUT" ? 504 : 422).json({ error: error.code, message: error.message });
+    }
+    if (error.code === "AI_RATE_LIMITED") {
+      return res.status(429).json({ error: error.code, message: error.message });
+    }
+    if (error.code === "AI_PROVIDER_ERROR" && (error.status === 401 || error.status === 403)) {
+      return res.status(503).json({ error: "AI_CONFIGURATION_ERROR", message: "A chave ou as permissões da API OpenAI foram recusadas." });
+    }
+    console.error("Falha ao transcrever vídeo:", error.code || "TRANSCRIPTION_ERROR");
+    return res.status(502).json({ error: error.code || "TRANSCRIPTION_ERROR", message: error.message || "Não foi possível transcrever o vídeo agora." });
+  } finally {
+    await fs.promises.unlink(audioPath).catch(() => {});
   }
 });
 
