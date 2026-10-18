@@ -17,21 +17,16 @@ npm start
 
 Por padrão, a API escuta em `http://localhost:3000`. Verifique `http://localhost:3000/api/health`. A resposta informa se o executável FFmpeg está disponível. Para usar a autenticação localmente, defina `CORTAI_SESSION_SECRET` antes de iniciar o servidor. O login Google só aparece quando `GOOGLE_CLIENT_ID` estiver configurado.
 
-## Upload e geração de cortes
+## Obter vídeo por link e gerar cortes
 
-1. Envie um vídeo com `POST /api/videos` usando `multipart/form-data` e o campo `video`. São aceitos MP4, MOV, WebM e MKV, até 100 MB.
-2. Guarde o `video.id` devolvido no sucesso (HTTP 201).
-3. Gere um corte com `POST /api/videos/:videoId/cuts`, enviando JSON com `startSeconds` e `durationSeconds`. O início deve ser não negativo e a duração deve ser maior que zero e no máximo 60 segundos, sem ultrapassar o fim do vídeo.
-4. A resposta inclui `cut.id` e `cut.downloadUrl`. Baixe o MP4 usando `GET /api/cuts/:cutId/download`.
+1. A interface aceita links HTTPS de vídeos públicos do YouTube e Twitch. O backend valida o domínio e usa `yt-dlp` para obter o vídeo; listas de reprodução não são processadas.
+2. A rota `POST /api/videos/from-url` recebe JSON `{"url":"https://..." }`, exige sessão, aceita apenas vídeos com mais de 5 minutos e limita o arquivo-fonte a 100 MB.
+3. O Cort-AI extrai e transcreve o áudio usando FFmpeg e a API de transcrição OpenAI. Depois, a IA escolhe automaticamente até 5 momentos com duração de 61 a 299 segundos.
+4. Cada momento é gerado como MP4 pelo FFmpeg. Os cortes podem ser assistidos em `GET /api/cuts/:cutId/stream` e baixados em `GET /api/cuts/:cutId/download`.
+5. Para o fluxo completo, configure `OPENAI_API_KEY`, `CORTAI_SESSION_SECRET` e os parâmetros de autenticação/armazenamento descritos abaixo. Não é necessário expor a chave OpenAI no navegador.
 
-Exemplo de corpo para gerar um corte de 15 segundos a partir do segundo 10:
+O endpoint de upload local `POST /api/videos` continua disponível para testes e recebe MP4, MOV, WebM e MKV de até 100 MB. A rota de cortes aceita `startSeconds` e `durationSeconds`; a duração precisa estar entre 61 e 299 segundos e permanecer dentro do vídeo original.
 
-```json
-{
-  "startSeconds": 10,
-  "durationSeconds": 15
-}
-```
 
 Por padrão, os arquivos ficam em uma pasta temporária do sistema operacional e podem desaparecer após reinícios ou limpeza. O backend limita o armazenamento de vídeos e cortes a 500 MB (`CORTAI_MAX_STORAGE_MB`), reserva até 100 MB para cada upload ou corte em andamento e remove arquivos de vídeo com mais de 2 horas (`CORTAI_FILE_TTL_HOURS`), verificando a pasta periodicamente e antes de aceitar uploads. O limite reserva espaço para o tamanho máximo de upload (100 MB) e para cada corte em andamento (até 100 MB), inclusive quando há operações simultâneas. O FFmpeg recebe um limite de saída de 100 MB por corte; a API verifica o tamanho final antes de disponibilizar o arquivo. Esses valores podem ser ajustados por variáveis de ambiente. Para escolher outra pasta, configure `CORTAI_STORAGE_DIR` antes de iniciar o servidor. Em uma hospedagem como Render, essa variável deve apontar para o caminho de montagem de um disco persistente configurado no próprio serviço (por exemplo, `/var/data`, se esse for o caminho escolhido). Configurar a variável, sozinho, **não cria** o disco nem garante persistência.
 
