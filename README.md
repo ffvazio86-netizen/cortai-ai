@@ -33,7 +33,7 @@ Exemplo de corpo para gerar um corte de 15 segundos a partir do segundo 10:
 }
 ```
 
-Por padrão, os arquivos ficam em uma pasta temporária do sistema operacional e podem desaparecer após reinícios ou limpeza. Para escolher outra pasta, configure `CORTAI_STORAGE_DIR` antes de iniciar o servidor. Em uma hospedagem como Render, essa variável deve apontar para o caminho de montagem de um disco persistente configurado no próprio serviço (por exemplo, `/var/data`, se esse for o caminho escolhido). Configurar a variável, sozinho, **não cria** o disco nem garante persistência.
+Por padrão, os arquivos ficam em uma pasta temporária do sistema operacional e podem desaparecer após reinícios ou limpeza. O backend limita o armazenamento de vídeos e cortes a 500 MB (`CORTAI_MAX_STORAGE_MB`) e remove arquivos de vídeo com mais de 2 horas (`CORTAI_FILE_TTL_HOURS`), verificando a pasta periodicamente e antes de aceitar uploads. O limite reserva espaço para o tamanho máximo de upload (100 MB), inclusive quando há envios simultâneos. Esses valores podem ser ajustados por variáveis de ambiente. Para escolher outra pasta, configure `CORTAI_STORAGE_DIR` antes de iniciar o servidor. Em uma hospedagem como Render, essa variável deve apontar para o caminho de montagem de um disco persistente configurado no próprio serviço (por exemplo, `/var/data`, se esse for o caminho escolhido). Configurar a variável, sozinho, **não cria** o disco nem garante persistência.
 
 Não envie vídeos privados ou sensíveis para uma instância pública: autenticação e autorização ainda não estão implementadas. Antes de produção, também é necessário configurar limites de uso e proteção contra abuso.
 
@@ -57,6 +57,7 @@ A disponibilidade, o custo e as opções de disco dependem do plano atual do Ren
 - O Express confia em proxy reverso somente quando `TRUST_PROXY=1`. Em Render, configure essa variável como `1` se o serviço estiver atrás do proxy único padrão da plataforma; localmente, deixe `0`.
 - O limitador usa memória do processo. Em múltiplas instâncias, os contadores não são compartilhados; para produção com escala, use um armazenamento compartilhado de rate limit.
 - Os limites por IP não substituem autenticação, limites de custo ou proteção de concorrência de processamento.
+- O limite de armazenamento e a limpeza automática são proteções básicas para um MVP de instância única; não substituem armazenamento dedicado, monitoramento ou quotas compartilhadas em múltiplas instâncias.
 
 ## Testes
 
