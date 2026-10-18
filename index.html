@@ -20,7 +20,32 @@
 <div class="wrap">
 <nav class="nav"><div class="brand"><div class="logo">✂</div>Cortaí <span class="gradient">AI</span></div><span class="pill">● Feito para celular</span></nav>
 <header class="hero"><div class="eyebrow">✦ GERAÇÃO DE CORTES COM FFMPEG</div><h1>Transforme vídeos em <span class="gradient">cortes virais.</span></h1><p>Envie um vídeo do seu computador e gere um corte MP4 de até 60 segundos. A geração de legendas automáticas, o formato vertical e a detecção de melhores momentos por IA ainda não estão disponíveis.</p></header>
-<section class="panel">
+<section class="panel" id="authPanel">
+<div class="head"><span class="step">00</span> Entre ou crie sua conta</div>
+<p class="fine" style="margin-top:0">Seus vídeos e cortes ficam associados à sua conta.</p>
+<div class="opts">
+<div>
+<label class="label" for="authEmail">E-mail</label>
+<input class="url" id="authEmail" type="email" autocomplete="email" maxlength="254" required placeholder="voce@exemplo.com">
+</div>
+<div>
+<label class="label" for="authPassword">Senha (mínimo 12 caracteres)</label>
+<input class="url" id="authPassword" type="password" autocomplete="current-password" minlength="12" maxlength="128" required placeholder="Sua senha">
+</div>
+</div>
+<div class="clipactions" style="margin-top:14px">
+<button type="button" id="loginButton">Entrar</button>
+<button type="button" id="registerButton">Criar conta</button>
+</div>
+<div style="margin:16px 0;text-align:center;color:var(--muted);font-size:12px">ou continue com Google</div>
+<div id="googleSignIn"></div>
+<div class="status" id="authStatus" role="status"></div>
+</section>
+<section class="panel" id="accountPanel" hidden>
+<div class="head"><span class="step">✓</span> Sua conta</div>
+<div class="opts"><p id="accountEmail" style="margin:0;overflow-wrap:anywhere"></p><button type="button" id="logoutButton">Sair</button></div>
+</section>
+<section class="panel" id="appPanel" hidden>
 <div class="head"><span class="step">01</span> Envie um vídeo do computador</div>
 <label class="label" for="videoFile">Arquivo de vídeo (MP4, MOV, WebM ou MKV — até 100 MB)</label>
 <div class="inputrow"><input id="videoFile" class="url" type="file" accept="video/mp4,video/quicktime,video/webm,video/x-matroska"></div>
@@ -45,6 +70,79 @@
 <script>
 const $=id=>document.getElementById(id);
 const API_BASE=(window.CORTAI_API_URL||'').replace(/\/$/,'');
+let authUser=null;
+function authMessage(message,isError=false){
+ const el=$('authStatus');el.textContent=message;el.className='status show';el.style.borderColor=isError?'#b91c1c':'';
+}
+async function authRequest(path,payload){
+ const response=await fetch(API_BASE+path,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+ const data=await response.json().catch(()=>({}));
+ if(!response.ok)throw new Error(data.message||'Não foi possível autenticar.');
+ return data;
+}
+function showSignedIn(user){
+ authUser=user;
+ $('authPanel').hidden=true;$('accountPanel').hidden=false;$('appPanel').hidden=false;
+ $('accountEmail').textContent='Conectado como '+user.email;
+}
+function showSignedOut(){
+ authUser=null;
+ $('authPanel').hidden=false;$('accountPanel').hidden=true;$('appPanel').hidden=true;
+}
+async function refreshAuth(){
+ try{
+  const response=await fetch(API_BASE+'/api/auth/me',{credentials:'same-origin',cache:'no-store'});
+  const data=await response.json().catch(()=>({}));
+  if(response.ok&&data.authenticated&&data.user)showSignedIn(data.user);else showSignedOut();
+ }catch{showSignedOut();}
+}
+$('loginButton').addEventListener('click',async()=>{
+ try{
+  $('loginButton').disabled=true;
+  const data=await authRequest('/api/auth/login',{email:$('authEmail').value,password:$('authPassword').value});
+  showSignedIn(data.user);authMessage('Login realizado.');
+ }catch(error){authMessage(error.message,true);}
+ finally{$('loginButton').disabled=false;}
+});
+$('registerButton').addEventListener('click',async()=>{
+ try{
+  $('registerButton').disabled=true;
+  const data=await authRequest('/api/auth/register',{email:$('authEmail').value,password:$('authPassword').value});
+  showSignedIn(data.user);
+ }catch(error){authMessage(error.message,true);}
+ finally{$('registerButton').disabled=false;}
+});
+$('logoutButton').addEventListener('click',async()=>{
+ try{
+  const response=await fetch(API_BASE+'/api/auth/logout',{method:'POST',credentials:'same-origin'});
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error(data.message||'Não foi possível sair.');
+  showSignedOut();authMessage('Você saiu da sua conta.');
+ }catch(error){authMessage(error.message,true);}
+});
+async function setupGoogleSignIn(){
+ try{
+  const response=await fetch(API_BASE+'/api/auth/config',{cache:'no-store'});
+  const config=await response.json();
+  if(!response.ok||!config.googleClientId)return;
+  window.handleCortaiGoogleCredential=async(result)=>{
+   try{
+    const data=await authRequest('/api/auth/google',{credential:result.credential});
+    showSignedIn(data.user);
+   }catch(error){authMessage(error.message,true);}
+  };
+  const script=document.createElement('script');
+  script.src='https://accounts.google.com/gsi/client';script.async=true;script.defer=true;
+  script.onload=()=>{
+   if(!window.google?.accounts?.id)return;
+   window.google.accounts.id.initialize({client_id:config.googleClientId,callback:window.handleCortaiGoogleCredential});
+   window.google.accounts.id.renderButton($('googleSignIn'),{theme:'outline',size:'large',shape:'rectangular',text:'continue_with',width:280});
+  };
+  script.onerror=()=>authMessage('Não foi possível carregar o login do Google.',true);
+  document.head.appendChild(script);
+ }catch{ /* Google sign-in stays hidden until configured. */ }
+}
+refreshAuth();setupGoogleSignIn();
 function showStatus(message,isError=false){const s=$('status');s.className='status show';s.textContent=message;s.style.borderColor=isError?'#b91c1c':'';}
 $('generate').addEventListener('click',async()=>{
  const file=$('videoFile').files[0];
