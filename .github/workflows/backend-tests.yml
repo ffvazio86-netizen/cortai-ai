@@ -25,8 +25,8 @@ jobs:
       - name: Install FFmpeg tools
         run: |
           sudo apt-get update
-          sudo apt-get install --yes ffmpeg
-      - name: Install dependencies from lockfile
-        run: npm ci
+          sudo apt-get install --yes ffmpeg yt-dlp
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
       - name: Run tests
         run: npm test
