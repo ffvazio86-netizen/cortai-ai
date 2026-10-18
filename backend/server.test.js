@@ -74,6 +74,8 @@ test("GET / serves the responsive Cort-AI frontend", async (t) => {
   assert.match(body, /name="viewport"/);
   assert.match(body, /Cortaí AI/);
   assert.match(body, /gere um corte MP4 de até 60 segundos/i);
+  assert.match(body, /https:\/\/cortai-ai-backend\.onrender\.com/);
+  assert.match(body, /window\.CORTAI_API_URL/);
   assert.doesNotMatch(body, /prepare 3 cortes verticais/i);
 });
 
