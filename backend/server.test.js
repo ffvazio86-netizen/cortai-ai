@@ -5,6 +5,9 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const { app } = require("./server");
+const uploadDirectory = path.resolve(
+  process.env.CORTAI_STORAGE_DIR || path.join(os.tmpdir(), "cortai-ai-uploads")
+);
 
 async function startServer(t) {
   const server = app.listen(0, "127.0.0.1");
@@ -72,7 +75,7 @@ test("POST /api/videos accepts a real video and returns its duration", async (t)
   assert.equal(body.video.mimeType, "video/mp4");
   assert.ok(body.video.durationSeconds > 0);
 
-  await fs.unlink(path.join(os.tmpdir(), "cortai-ai-uploads", `${body.video.id}.mp4`));
+  await fs.unlink(path.join(uploadDirectory, `${body.video.id}.mp4`));
 });
 
 test("POST /api/videos rejects a fake video file", async (t) => {
@@ -152,9 +155,9 @@ test("POST /api/videos/:videoId/cuts generates a real downloadable MP4 cut", asy
   assert.match(downloadResponse.headers.get("content-type"), /video\/mp4/);
   const downloaded = Buffer.from(await downloadResponse.arrayBuffer());
   assert.ok(downloaded.length > 100);
-  const outputPath = path.join(os.tmpdir(), "cortai-ai-uploads", `${cutBody.cut.id}.mp4`);
+  const outputPath = path.join(uploadDirectory, `${cutBody.cut.id}.mp4`);
   await fs.unlink(outputPath);
-  await fs.unlink(path.join(os.tmpdir(), "cortai-ai-uploads", `${uploaded.video.id}.mp4`));
+  await fs.unlink(path.join(uploadDirectory, `${uploaded.video.id}.mp4`));
 });
 
 test("POST /api/videos/:videoId/cuts rejects invalid parameters", async (t) => {
