@@ -8,7 +8,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
-RUN npm install --omit=dev --no-audit --no-fund
+RUN npm ci --omit=dev
 
 COPY backend ./backend
 COPY index.html ./index.html
