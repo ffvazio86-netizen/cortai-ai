@@ -37,7 +37,16 @@ Por padrão, os arquivos ficam em uma pasta temporária do sistema operacional e
 
 A autenticação por e-mail/senha e Google está habilitada por padrão. As rotas de upload, geração e download exigem sessão e os IDs de vídeos/cortes são associados ao usuário que os criou. Use `CORTAI_SESSION_SECRET` com pelo menos 32 bytes aleatórios e configure `GOOGLE_CLIENT_ID` para habilitar o botão Google. A base SQLite de usuários e sessões fica em `CORTAI_DATABASE_PATH` (por padrão, ao lado dos arquivos no diretório `CORTAI_STORAGE_DIR`). Em produção, configure `CORTAI_STORAGE_DIR` para o ponto de montagem do disco persistente e `CORTAI_DATABASE_PATH` para um arquivo nesse mesmo disco; faça backup do banco e mantenha o mesmo `CORTAI_SESSION_SECRET` entre reinícios. SQLite usa arquivos auxiliares WAL/SHM, então o diretório do banco precisa permitir gravação. Não defina `AUTH_REQUIRED=0` em um serviço público.
 
-## Configurar autenticação (sem publicar)\n\n1. Gere um segredo com `openssl rand -base64 48` e configure `CORTAI_SESSION_SECRET` no ambiente do backend.\n2. Configure `CORTAI_DATABASE_PATH` para um arquivo no disco persistente, por exemplo `/var/data/cortai-auth.sqlite`, e `CORTAI_STORAGE_DIR=/var/data`. O arquivo SQLite não deve ficar num diretório temporário em produção.\n3. Para login Google, crie um OAuth Client ID do tipo aplicação Web no Google Cloud Console, adicione a origem pública exata do Cort-AI em “Authorized JavaScript origins” e configure o valor público do client ID em `GOOGLE_CLIENT_ID`. O backend verifica assinatura, emissor, público, expiração e e-mail verificado do token.\n4. Configure `CORTAI_PUBLIC_ORIGIN` com a origem pública exata (esquema e domínio, sem caminho). O cookie de sessão é HttpOnly, SameSite=Lax e Secure em produção.\n5. Confirme que a aplicação usa Node.js 22 ou superior para o banco SQLite nativo.\n6. Antes de disponibilizar o serviço, teste cadastro, login, logout, login Google, upload, geração e download em uma instância de homologação. Não use `AUTH_REQUIRED=0` em produção.\n\nA autenticação não envia senhas nem tokens Google ao banco em texto claro: senhas são derivadas com scrypt e tokens de sessão são armazenados como hashes.\n\n## Preparar armazenamento persistente no Render (sem publicar)
+## Configurar autenticação (sem publicar)
+
+1. Gere um segredo com `openssl rand -base64 48` e configure `CORTAI_SESSION_SECRET` no ambiente do backend.
+2. Configure `CORTAI_DATABASE_PATH` para um arquivo no disco persistente, por exemplo `/var/data/cortai-auth.sqlite`, e `CORTAI_STORAGE_DIR=/var/data`. O arquivo SQLite não deve ficar num diretório temporário em produção.
+3. Para login Google, crie um OAuth Client ID do tipo aplicação Web no Google Cloud Console, adicione a origem pública exata do Cort-AI em “Authorized JavaScript origins” e configure o valor público do client ID em `GOOGLE_CLIENT_ID`. O backend verifica assinatura, emissor, público, expiração e e-mail verificado do token.
+4. Configure `CORTAI_PUBLIC_ORIGIN` com a origem pública exata (esquema e domínio, sem caminho). O cookie de sessão é HttpOnly, SameSite=Lax e Secure em produção.
+5. Confirme que a aplicação usa Node.js 22 ou superior para o banco SQLite nativo.
+6. Antes de disponibilizar o serviço, teste cadastro, login, logout, login Google, upload, geração e download em uma instância de homologação. Não use `AUTH_REQUIRED=0` em produção.
+
+A autenticação não envia senhas nem tokens Google ao banco em texto claro: senhas são derivadas com scrypt e tokens de sessão são armazenados como hashes.\n\n## Preparar armazenamento persistente no Render (sem publicar)
 
 O backend aceita a variável `CORTAI_STORAGE_DIR`, mas o armazenamento só será persistente quando o serviço tiver um disco persistente montado nesse caminho.
 
@@ -73,6 +82,6 @@ O `Dockerfile` instala o FFmpeg para executar o backend em contêiner. Nenhum se
 
 ## Limitações atuais
 
-- A geração de cortes usa parâmetros fornecidos pelo usuário; não há detecção automática de melhores momentos por IA.
-- Não há transcrição, armazenamento permanente, autenticação ou autorização.
-- O diretório de upload temporário não é um sistema de armazenamento de produção.
+- A geração de cortes usa parâmetros fornecidos pelo usuário; ainda não há detecção automática de melhores momentos por IA nem transcrição.
+- A autenticação por e-mail/senha está implementada; o login Google depende de `GOOGLE_CLIENT_ID` configurado.
+- O armazenamento só é persistente se `CORTAI_STORAGE_DIR` e `CORTAI_DATABASE_PATH` apontarem para um disco persistente configurado. O armazenamento em disco local é adequado para um MVP de instância única, não para produção em escala.
