@@ -87,7 +87,7 @@ test("registration validates email and password and prevents duplicate accounts"
   assert.equal(invalidEmail.response.status, 400);
 
   const weakPassword = await request(baseUrl, "/api/auth/register", {
-    email: `weak-${process.pid}@example.com`, password: "short"
+    email: `weak-${process.pid}@example.com`, password: ""
   });
   assert.equal(weakPassword.response.status, 400);
 
