@@ -82,7 +82,8 @@ function parseCookies(header = "") {
 
 function setCookie(res, token, maxAge = SESSION_SECONDS) {
   const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
-  res.setHeader("Set-Cookie", `${COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`);
+  const sameSite = process.env.NODE_ENV === "production" && process.env.CORTAI_ALLOWED_ORIGIN ? "None" : "Lax";
+  res.setHeader("Set-Cookie", `${COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=${sameSite}; Max-Age=${maxAge}${secure}`);
 }
 
 function clearCookie(res) {
@@ -94,7 +95,7 @@ function checkOrigin(req, res) {
   if (!origin) return true;
   let expected;
   try {
-    expected = new URL(process.env.CORTAI_PUBLIC_ORIGIN || `${req.protocol}://${req.get("host")}`).origin;
+    expected = new URL(process.env.CORTAI_ALLOWED_ORIGIN || process.env.CORTAI_PUBLIC_ORIGIN || `${req.protocol}://${req.get("host")}`).origin;
   } catch {
     res.status(403).json({ error: "invalid_origin", message: "Origem inválida." });
     return false;
