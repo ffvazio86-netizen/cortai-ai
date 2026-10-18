@@ -160,6 +160,33 @@ test("POST /api/videos/:videoId/cuts generates a real downloadable MP4 cut", asy
   await fs.unlink(path.join(uploadDirectory, `${uploaded.video.id}.mp4`));
 });
 
+test("POST /api/videos/:videoId/cuts refuses to exceed the storage quota", async (t) => {
+  const maxStorageMb = Math.max(100, Number.parseInt(process.env.CORTAI_MAX_STORAGE_MB || "500", 10));
+  const quotaFillPath = path.join(uploadDirectory, "cortai-quota-test.mp4");
+  const handle = await fs.open(quotaFillPath, "w");
+  try {
+    // Sparse file: exercises quota accounting without allocating equivalent disk space.
+    await handle.truncate((maxStorageMb - 50) * 1024 * 1024);
+  } finally {
+    await handle.close();
+  }
+  t.after(() => fs.rm(quotaFillPath, { force: true }));
+
+  const baseUrl = await startServer(t);
+  const response = await fetch(
+    `${baseUrl}/api/videos/123e4567-e89b-42d3-a456-426614174000/cuts`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ startSeconds: 0, durationSeconds: 1 })
+    }
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 507);
+  assert.equal(body.error, "storage_limit_reached");
+});
+
 test("POST /api/videos/:videoId/cuts rejects invalid parameters", async (t) => {
   const baseUrl = await startServer(t);
   const response = await fetch(`${baseUrl}/api/videos/123e4567-e89b-42d3-a456-426614174000/cuts`, {
