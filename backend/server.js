@@ -373,11 +373,11 @@ app.post("/api/videos/:videoId/cuts", auth.authenticate, cutRateLimit, async (re
     !Number.isFinite(durationSeconds) ||
     startSeconds < 0 ||
     durationSeconds <= 0 ||
-    durationSeconds > 60
+    durationSeconds > 299
   ) {
     return res.status(400).json({
       error: "invalid_cut_parameters",
-      message: "Informe startSeconds >= 0 e durationSeconds entre 0 e 60 segundos."
+      message: "Informe startSeconds >= 0 e durationSeconds entre 0 e 299 segundos."
     });
   }
 
@@ -426,7 +426,7 @@ app.post("/api/videos/:videoId/cuts", auth.authenticate, cutRateLimit, async (re
     const cutId = randomUUID();
     const outputPath = path.join(uploadDirectory, `${cutId}.mp4`);
     try {
-      await generateVideoCut(inputPath, outputPath, startSeconds, durationSeconds, 60000, MAX_CUT_BYTES);
+      await generateVideoCut(inputPath, outputPath, startSeconds, durationSeconds, 180000, MAX_CUT_BYTES);
       const outputStats = await fs.promises.stat(outputPath);
       if (outputStats.size > MAX_CUT_BYTES) {
         throw Object.assign(new Error("Generated cut exceeded the reserved storage size."), { code: "CUT_SIZE_LIMIT" });
