@@ -19,7 +19,7 @@
 <body>
 <div class="wrap">
 <nav class="nav"><div class="brand"><div class="logo">✂</div>Cortaí <span class="gradient">AI</span></div><span class="pill">● Feito para celular</span></nav>
-<header class="hero"><div class="eyebrow">✦ GERAÇÃO DE CORTES COM FFMPEG</div><h1>Transforme vídeos em <span class="gradient">cortes virais.</span></h1><p>Envie um vídeo do seu computador e gere três cortes MP4 de até 60 segundos. A geração de legendas automáticas, o formato vertical e a detecção de melhores momentos por IA ainda não estão disponíveis.</p></header>
+<header class="hero"><div class="eyebrow">✦ GERAÇÃO DE CORTES COM FFMPEG</div><h1>Transforme vídeos em <span class="gradient">cortes virais.</span></h1><p>Envie um vídeo do seu computador. A IA transcreve o áudio, sugere os melhores momentos e permite gerar cortes de 1 a quase 5 minutos.</p></header>
 <section class="panel" id="authPanel">
 <div class="head"><span class="step">00</span> Entre ou crie sua conta</div>
 <p class="fine" style="margin-top:0">Seus vídeos e cortes ficam associados à sua conta.</p>
@@ -48,24 +48,31 @@
 <div class="opts"><p id="accountEmail" style="margin:0;overflow-wrap:anywhere"></p><button type="button" id="logoutButton">Sair</button></div>
 </section>
 <section class="panel" id="appPanel" hidden>
-<div class="head"><span class="step">01</span> Envie um vídeo do computador</div>
+<div class="head"><span class="step">01</span> Envie um vídeo para analisar</div>
 <label class="label" for="videoFile">Arquivo de vídeo (MP4, MOV, WebM ou MKV — até 100 MB)</label>
 <div class="inputrow"><input id="videoFile" class="url" type="file" accept="video/mp4,video/quicktime,video/webm,video/x-matroska"></div>
 <div class="opts">
-<div><label class="label" for="duration">Duração de cada corte</label><select id="duration" class="select"><option value="15">15 segundos</option><option value="30" selected>30 segundos</option><option value="45">45 segundos</option><option value="60">60 segundos</option></select></div>
-<div><label class="label">Processamento</label><p style="color:var(--muted);font-size:13px;line-height:1.5;margin:0">O backend gera três cortes MP4 de até 60 segundos. O formato vertical e as legendas automáticas ainda não estão implementados.</p></div>
+<div><label class="label">Como funciona</label><p style="color:var(--muted);font-size:13px;line-height:1.5;margin:0">A IA analisa a transcrição e encontra trechos de 61 a 299 segundos. Depois você escolhe quais quer gerar.</p></div>
+<div><label class="label">Formato</label><p style="color:var(--muted);font-size:13px;line-height:1.5;margin:0">Os arquivos são MP4. O enquadramento vertical e as legendas automáticas ainda não estão disponíveis.</p></div>
 </div>
 
-<button class="generate" id="generate">✂ Enviar vídeo e gerar 3 cortes</button>
-<p class="fine">Envio real para o backend · 3 cortes MP4 · duração de 15 a 60 segundos</p>
+<button class="generate" id="generate">✦ Analisar vídeo e encontrar melhores momentos</button>
+<p class="fine">A análise usa transcrição por IA e exige uma chave OpenAI configurada no backend.</p>
 <div class="status" id="status" role="status"></div>
+</section>
+<section class="panel" id="suggestionsPanel" hidden style="margin-top:20px">
+<div class="head"><span class="step">02</span> Escolha os melhores momentos</div>
+<p class="fine" style="text-align:left;margin:0 0 12px">Marque os trechos que deseja transformar em arquivos MP4.</p>
+<div id="suggestionsList"></div>
+<button class="generate" id="createSelected" type="button">Gerar cortes selecionados</button>
+<div class="status" id="suggestionStatus" role="status"></div>
 </section>
 <section class="results">
 <div class="results-top"><div><h2>Seus cortes</h2><p>3 arquivos MP4 reais, com reprodução e download</p></div><span class="count">3 CORTES</span></div>
 <div class="empty" id="empty"><div class="big">🎬</div><strong>Seu corte aparecerá aqui.</strong><br>Selecione um arquivo de vídeo para enviar ao backend e gerar três cortes reais.</div>
 <div class="cards" id="cards" hidden></div>
 </section>
-<div class="notice"><strong>Importante:</strong> esta página envia o arquivo ao backend e gera três cortes MP4 reais com FFmpeg. Por padrão, usa <code>https://cortai-ai-backend.onrender.com</code>; se necessário, a URL pode ser sobrescrita por <code>window.CORTAI_API_URL</code>. Os arquivos são temporários; use apenas vídeos que você tenha direito de processar. Legendas automáticas, detecção de melhores momentos e cortes verticais ainda não estão disponíveis.</div>
+<div class="notice"><strong>Importante:</strong> use apenas vídeos que você tenha direito de processar. A transcrição e a análise por IA precisam de <code>OPENAI_API_KEY</code> configurada no backend. Os arquivos são temporários na configuração padrão; cortes verticais e legendas automáticas ainda não estão disponíveis. A página não importa vídeos por link do YouTube ou Twitch.</div>
 <footer>Cortaí AI · Projeto inicial responsivo para celular</footer>
 </div>
 <div class="toast" id="toast"></div>
@@ -147,42 +154,66 @@ async function setupGoogleSignIn(){
 }
 refreshAuth();setupGoogleSignIn();
 function showStatus(message,isError=false){const s=$('status');s.className='status show';s.textContent=message;s.style.borderColor=isError?'#b91c1c':'';}
+let currentVideo=null;
+let currentSuggestions=[];
+function showSuggestionStatus(message,isError=false){
+ const el=$('suggestionStatus');el.textContent=message;el.className='status show';el.style.borderColor=isError?'#b91c1c':'';
+}
+async function apiJson(path,options={}){
+ const response=await fetch(API_BASE+path,{credentials:'include',...options});
+ const data=await response.json().catch(()=>({}));
+ if(!response.ok)throw new Error(data.message||'Não foi possível concluir a solicitação.');
+ return data;
+}
 $('generate').addEventListener('click',async()=>{
  const file=$('videoFile').files[0];
  if(!file){$('videoFile').focus();showStatus('Selecione um arquivo de vídeo primeiro.',true);return;}
  if(file.size>100*1024*1024){showStatus('O arquivo ultrapassa o limite de 100 MB.',true);return;}
  const button=$('generate');button.disabled=true;button.style.opacity='.65';
- $('cards').hidden=true;$('empty').hidden=false;
+ $('suggestionsPanel').hidden=true;$('cards').hidden=true;$('empty').hidden=false;
+ currentVideo=null;currentSuggestions=[];
  try{
   showStatus('Enviando vídeo ao backend…');
   const form=new FormData();form.append('video',file);
-  const uploadResponse=await fetch(API_BASE+'/api/videos',{method:'POST',body:form,credentials:'include'});
-  const uploaded=await uploadResponse.json().catch(()=>({}));
-  if(!uploadResponse.ok)throw new Error(uploaded.message||'Não foi possível enviar o vídeo ao backend.');
-  const requestedDuration=Number($('duration').value);
-  const sourceDuration=Number(uploaded.video.durationSeconds);
-  const actualDuration=Math.min(requestedDuration,sourceDuration);
-  if(!Number.isFinite(actualDuration)||actualDuration<=0)throw new Error('Não foi possível identificar a duração do vídeo.');
-  const maxStart=Math.max(0,sourceDuration-actualDuration);
-  const starts=[0,maxStart/2,maxStart];
-  const cuts=[];
-  for(let i=0;i<starts.length;i++){
-   showStatus('Vídeo recebido. Gerando corte '+(i+1)+' de 3 com FFmpeg…');
-   const cutResponse=await fetch(API_BASE+'/api/videos/'+encodeURIComponent(uploaded.video.id)+'/cuts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({startSeconds:starts[i],durationSeconds:actualDuration}),credentials:'include'});
-   const cutResult=await cutResponse.json().catch(()=>({}));
-   if(!cutResponse.ok)throw new Error(cutResult.message||'Não foi possível gerar o corte '+(i+1)+'.');
-   cuts.push(cutResult.cut);
-  }
-  $('empty').hidden=true;$('cards').hidden=false;
+  const uploaded=await apiJson('/api/videos',{method:'POST',body:form});
+  currentVideo={id:uploaded.video.id,name:file.name,duration:Number(uploaded.video.durationSeconds)};
+  if(!Number.isFinite(currentVideo.duration)||currentVideo.duration<=299)throw new Error('Este vídeo precisa ter mais de 5 minutos para encontrar cortes de 1 a 5 minutos.');
+  showStatus('Vídeo recebido. Transcrevendo o áudio com IA; isso pode levar alguns minutos…');
+  const transcript=await apiJson('/api/videos/'+encodeURIComponent(currentVideo.id)+'/transcribe',{method:'POST'});
+  showStatus('Transcrição concluída. Procurando os melhores momentos…');
+  const analysis=await apiJson('/api/ai/suggest-highlights',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({videoDurationSeconds:transcript.videoDurationSeconds,transcriptSegments:transcript.transcriptSegments})});
+  currentSuggestions=analysis.cuts||[];
+  if(!currentSuggestions.length)throw new Error('A IA não encontrou momentos para sugerir neste vídeo.');
   const escapeHtml=value=>String(value).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-  const safeName=escapeHtml(file.name);
-  $('cards').innerHTML=cuts.map((cut,i)=>'<article class="clip"><video class="video-player" controls playsinline preload="metadata" src="'+API_BASE+cut.streamUrl+'"></video><div class="clipbody"><div class="clipnum">CORTE '+(i+1)+' DE 3</div><h3>'+safeName+'</h3><div class="meta"><span>MP4 real</span><span>'+Math.round(cut.durationSeconds)+' segundos</span><span>Início: '+Math.round(cut.startSeconds)+'s</span></div><div class="clipactions"><button type="button" data-cut-id="'+cut.id+'" data-download-url="'+cut.downloadUrl+'">Baixar corte MP4</button></div></div></article>').join('');
+  $('suggestionsList').innerHTML=currentSuggestions.map((cut,i)=>'<label style="display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:12px;padding:12px;margin:9px 0;cursor:pointer"><input type="checkbox" data-suggestion-index="'+i+'" checked style="accent-color:#a78bfa;width:18px;height:18px;flex-shrink:0;margin-top:3px"><span><strong>'+escapeHtml(cut.title)+'</strong><br><span style="color:var(--muted);font-size:12px">De '+Math.floor(cut.startSeconds/60)+':'+String(Math.floor(cut.startSeconds%60)).padStart(2,'0')+' até '+Math.floor(cut.endSeconds/60)+':'+String(Math.floor(cut.endSeconds%60)).padStart(2,'0')+' · '+Math.round(cut.durationSeconds/60*10)/10+' min</span><br><span style="color:#d8d7e6;font-size:13px">'+escapeHtml(cut.reason||'Momento selecionado pela IA')+'</span></span></label>').join('');
+  $('suggestionsPanel').hidden=false;
+  showStatus('Análise concluída! Marque os momentos que deseja gerar.');
+  $('suggestionsPanel').scrollIntoView({behavior:'smooth',block:'start'});
+ }catch(error){showStatus(error.message+' Confira a configuração da OpenAI e se o backend está acessível.',true);}
+ finally{button.disabled=false;button.style.opacity='1';}
+});
+$('createSelected').addEventListener('click',async()=>{
+ if(!currentVideo||!currentSuggestions.length){showSuggestionStatus('Analise um vídeo antes de gerar cortes.',true);return;}
+ const selected=[...$('suggestionsList').querySelectorAll('input[data-suggestion-index]:checked')].map(el=>currentSuggestions[Number(el.dataset.suggestionIndex)]).filter(Boolean);
+ if(!selected.length){showSuggestionStatus('Marque pelo menos um momento.',true);return;}
+ const button=$('createSelected');button.disabled=true;button.style.opacity='.65';
+ const cuts=[];
+ try{
+  for(let i=0;i<selected.length;i++){
+   const item=selected[i];
+   showSuggestionStatus('Gerando corte '+(i+1)+' de '+selected.length+' com FFmpeg…');
+   const result=await apiJson('/api/videos/'+encodeURIComponent(currentVideo.id)+'/cuts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({startSeconds:item.startSeconds,durationSeconds:item.durationSeconds})});
+   cuts.push({...result.cut,title:item.title,reason:item.reason});
+  }
+  const escapeHtml=value=>String(value).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  $('cards').innerHTML=cuts.map((cut,i)=>'<article class="clip"><video class="video-player" controls playsinline preload="metadata" src="'+API_BASE+cut.streamUrl+'"></video><div class="clipbody"><div class="clipnum">MELHOR MOMENTO '+(i+1)+'</div><h3>'+escapeHtml(cut.title||currentVideo.name)+'</h3><div class="meta"><span>MP4 real</span><span>'+Math.round(cut.durationSeconds/60*10)/10+' minutos</span><span>Início: '+Math.floor(cut.startSeconds/60)+':'+String(Math.floor(cut.startSeconds%60)).padStart(2,'0')+'</span></div><p style="font-size:12px;color:var(--muted)">'+escapeHtml(cut.reason||'')+'</p><div class="clipactions"><button type="button" data-cut-id="'+cut.id+'" data-download-url="'+cut.downloadUrl+'">Baixar corte MP4</button></div></div></article>').join('');
+  $('cards').hidden=false;$('empty').hidden=true;
   $('cards').querySelectorAll('[data-cut-id]').forEach(button=>button.addEventListener('click',async()=>{
    try{const response=await fetch(API_BASE+button.dataset.downloadUrl,{credentials:'include'});if(!response.ok)throw new Error('Falha ao baixar o corte.');const blob=await response.blob();const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='cortai-cut-'+button.dataset.cutId+'.mp4';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
-   catch(e){showStatus(e.message,true);}
+   catch(e){showSuggestionStatus(e.message,true);}
   }));
-  showStatus('Pronto! Os 3 arquivos MP4 foram gerados. Você pode assistir aqui ou baixar cada corte.');
- }catch(error){showStatus(error.message+' Confira se o backend está ligado e acessível.',true);}
+  showSuggestionStatus('Pronto! Os cortes selecionados foram gerados. Você pode assistir ou baixar cada MP4.');
+ }catch(error){showSuggestionStatus(error.message,true);}
  finally{button.disabled=false;button.style.opacity='1';}
 });
 </script>
