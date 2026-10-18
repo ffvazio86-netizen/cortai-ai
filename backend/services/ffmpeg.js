@@ -1,6 +1,6 @@
 const { spawn } = require("node:child_process");
 
-function getFfmpegInfo(timeoutMs = 3000) {
+function getFfmpegInfo(timeoutMs = 5000) {
   return new Promise((resolve) => {
     let settled = false;
     let output = "";
@@ -45,13 +45,11 @@ function getFfmpegInfo(timeoutMs = 3000) {
       output += chunk.toString();
     });
 
-    child.on("error", (error) => {
+    child.on("error", () => {
       finish({
         available: false,
         version: null,
-        error: error.code === "ENOENT"
-          ? "FFmpeg is not installed or is not available in PATH."
-          : "FFmpeg could not be started."
+        error: "FFmpeg could not be started."
       });
     });
 
