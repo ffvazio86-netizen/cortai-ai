@@ -58,8 +58,12 @@ $('generate').addEventListener('click',async()=>{
   const uploadResponse=await fetch(API_BASE+'/api/videos',{method:'POST',body:form});
   const uploaded=await uploadResponse.json().catch(()=>({}));
   if(!uploadResponse.ok)throw new Error(uploaded.message||'Não foi possível enviar o vídeo ao backend.');
-  showStatus('Vídeo recebido. Gerando o corte com FFmpeg…');
-  const cutResponse=await fetch(API_BASE+'/api/videos/'+encodeURIComponent(uploaded.video.id)+'/cuts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({startSeconds:0,durationSeconds:Number($('duration').value)})});
+  const requestedDuration=Number($('duration').value);
+  const actualDuration=Math.min(requestedDuration,Number(uploaded.video.durationSeconds));
+  if(!Number.isFinite(actualDuration)||actualDuration<=0)throw new Error('Não foi possível identificar a duração do vídeo.');
+  const durationNote=actualDuration<requestedDuration?' O vídeo tem apenas '+Math.round(actualDuration)+' segundos; o corte será ajustado a essa duração.':'';
+  showStatus('Vídeo recebido. Gerando um corte de '+Math.round(actualDuration)+' segundos com FFmpeg…'+durationNote);
+  const cutResponse=await fetch(API_BASE+'/api/videos/'+encodeURIComponent(uploaded.video.id)+'/cuts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({startSeconds:0,durationSeconds:actualDuration})});
   const cutResult=await cutResponse.json().catch(()=>({}));
   if(!cutResponse.ok)throw new Error(cutResult.message||'Não foi possível gerar o corte.');
   $('empty').hidden=true;$('cards').hidden=false;
