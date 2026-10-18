@@ -1,6 +1,6 @@
 const { spawn } = require("node:child_process");
 
-function generateVideoCut(inputPath, outputPath, startSeconds, durationSeconds, timeoutMs = 60000) {
+function generateVideoCut(inputPath, outputPath, startSeconds, durationSeconds, timeoutMs = 60000, maxOutputBytes = 100 * 1024 * 1024) {
   return new Promise((resolve, reject) => {
     let settled = false;
     let stderr = "";
@@ -29,6 +29,7 @@ function generateVideoCut(inputPath, outputPath, startSeconds, durationSeconds, 
         "-preset", "ultrafast",
         "-c:a", "aac",
         "-movflags", "+faststart",
+        "-fs", String(maxOutputBytes),
         "-y",
         outputPath
       ], { stdio: ["ignore", "ignore", "pipe"] });
