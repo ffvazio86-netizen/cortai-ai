@@ -38,7 +38,9 @@ test("GET / serves the responsive Cort-AI frontend", async (t) => {
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type"), /text\/html/);
   assert.match(body, /name="viewport"/);
-  assert.match(body, /Cortaí AI/);\n  assert.match(body, /gere um corte MP4 de até 60 segundos/i);\n  assert.doesNotMatch(body, /prepare 3 cortes verticais/i);
+  assert.match(body, /Cortaí AI/);
+  assert.match(body, /gere um corte MP4 de até 60 segundos/i);
+  assert.doesNotMatch(body, /prepare 3 cortes verticais/i);
 });
 
 test("GET /api/health returns backend and FFmpeg status", async (t) => {
