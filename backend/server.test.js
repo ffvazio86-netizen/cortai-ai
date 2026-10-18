@@ -57,6 +57,11 @@ test("CORS allows credentialed requests only from the configured frontend origin
   });
   assert.equal(denied.status, 403);
   assert.equal(denied.headers.get("access-control-allow-origin"), null);
+
+  const blockedRequest = await fetch(`${baseUrl}/api/health`, {
+    headers: { origin: "https://attacker.example.test" }
+  });
+  assert.equal(blockedRequest.status, 403);
 });
 
 test("GET / serves the responsive Cort-AI frontend", async (t) => {
