@@ -9,6 +9,7 @@ const { getFfmpegInfo } = require("./services/ffmpeg");
 const { probeVideo } = require("./services/video-validation");
 const { generateVideoCut } = require("./services/video-cut");
 const { findUploadedVideo, UUID_PATTERN } = require("./services/video-files");
+const { cleanupExpiredFiles, getStorageUsage } = require("./services/video-storage");
 
 const app = express();
 app.disable("x-powered-by");
@@ -43,6 +44,23 @@ const uploadDirectory = path.resolve(
 );
 fs.mkdirSync(uploadDirectory, { recursive: true });
 
+const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
+const maxStorageBytes = Math.max(100, Number.parseInt(process.env.CORTAI_MAX_STORAGE_MB || "500", 10)) * 1024 * 1024;
+const fileTtlHours = Math.max(1, Number.parseInt(process.env.CORTAI_FILE_TTL_HOURS || "2", 10));
+const fileTtlMs = fileTtlHours * 60 * 60 * 1000;
+let pendingUploadBytes = 0;
+
+async function cleanupStorage() {
+  const removed = await cleanupExpiredFiles(uploadDirectory, fileTtlMs);
+  if (removed > 0) console.log(`Limpeza do Cort-AI: ${removed} arquivo(s) expirado(s) removido(s).`);
+}
+
+const cleanupTimer = setInterval(() => {
+  cleanupStorage().catch((error) => console.error("Falha na limpeza do armazenamento:", error.message));
+}, 10 * 60 * 1000);
+cleanupTimer.unref();
+cleanupStorage().catch((error) => console.error("Falha na limpeza inicial:", error.message));
+
 const allowedVideoTypes = new Map([
   ["video/mp4", ".mp4"],
   ["video/quicktime", ".mov"],
@@ -59,7 +77,7 @@ const videoUpload = multer({
     }
   }),
   limits: {
-    fileSize: 100 * 1024 * 1024,
+    fileSize: MAX_UPLOAD_BYTES,
     files: 1
   },
   fileFilter: (_req, file, callback) => {
@@ -86,8 +104,25 @@ app.get("/api/health", async (_req, res) => {
   });
 });
 
-app.post("/api/videos", uploadRateLimit, (req, res, next) => {
+app.post("/api/videos", uploadRateLimit, async (req, res, next) => {
+  try {
+    await cleanupStorage();
+    const currentUsage = await getStorageUsage(uploadDirectory);
+    // Reserve the maximum upload size before Multer writes the file, avoiding
+    // concurrent requests exceeding the configured quota.
+    if (currentUsage + pendingUploadBytes + MAX_UPLOAD_BYTES > maxStorageBytes) {
+      return res.status(507).json({
+        error: "storage_limit_reached",
+        message: "O armazenamento temporário está cheio. Tente novamente mais tarde."
+      });
+    }
+    pendingUploadBytes += MAX_UPLOAD_BYTES;
+  } catch (storageError) {
+    return next(storageError);
+  }
+
   videoUpload.single("video")(req, res, async (error) => {
+    pendingUploadBytes = Math.max(0, pendingUploadBytes - MAX_UPLOAD_BYTES);
     if (error) return next(error);
     if (!req.file) {
       return res.status(400).json({
