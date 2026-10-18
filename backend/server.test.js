@@ -73,7 +73,9 @@ test("GET / serves the responsive Cort-AI frontend", async (t) => {
   assert.match(response.headers.get("content-type"), /text\/html/);
   assert.match(body, /name="viewport"/);
   assert.match(body, /Cortaí AI/);
-  assert.match(body, /gere um corte MP4 de até 60 segundos/i);
+  assert.match(body, /gere três cortes MP4 de até 60 segundos/i);
+  assert.match(body, /class="video-player" controls playsinline/);
+  assert.match(body, /Baixar corte MP4/);
   assert.match(body, /https:\/\/cortai-ai-backend\.onrender\.com/);
   assert.match(body, /window\.CORTAI_API_URL/);
   assert.doesNotMatch(body, /prepare 3 cortes verticais/i);
@@ -198,6 +200,13 @@ test("POST /api/videos/:videoId/cuts generates a real downloadable MP4 cut", asy
   assert.equal(cutBody.cut.videoId, uploaded.video.id);
   assert.equal(cutBody.cut.format, "mp4");
   assert.ok(cutBody.cut.durationSeconds > 0);
+
+  const streamResponse = await fetch(`${baseUrl}${cutBody.cut.streamUrl}`);
+  assert.equal(streamResponse.status, 200);
+  assert.match(streamResponse.headers.get("content-type"), /video\/mp4/);
+  assert.match(streamResponse.headers.get("content-disposition"), /inline/);
+  const streamed = Buffer.from(await streamResponse.arrayBuffer());
+  assert.ok(streamed.length > 100);
 
   const downloadResponse = await fetch(`${baseUrl}${cutBody.cut.downloadUrl}`);
   assert.equal(downloadResponse.status, 200);
