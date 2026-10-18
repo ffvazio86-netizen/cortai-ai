@@ -345,7 +345,8 @@ app.post("/api/videos/:videoId/cuts", auth.authenticate, cutRateLimit, async (re
           startSeconds,
           durationSeconds: output.duration,
           format: "mp4",
-          downloadUrl: `/api/cuts/${cutId}/download`
+          downloadUrl: `/api/cuts/${cutId}/download`,
+          streamUrl: `/api/cuts/${cutId}/stream`
         }
       });
     } catch (error) {
@@ -380,6 +381,42 @@ app.post("/api/videos/:videoId/cuts", auth.authenticate, cutRateLimit, async (re
     if (cutReservation) {
       pendingCutBytes = Math.max(0, pendingCutBytes - MAX_CUT_BYTES);
     }
+  }
+});
+
+app.get("/api/cuts/:cutId/stream", auth.authenticate, async (req, res) => {
+  const { cutId } = req.params;
+  if (!UUID_PATTERN.test(cutId)) {
+    return res.status(400).json({
+      error: "invalid_cut_id",
+      message: "O ID do corte é inválido."
+    });
+  }
+
+  try {
+    if (!auth.ownsResource(req.user?.id, cutId, "cut")) {
+      return res.status(404).json({ error: "cut_not_found", message: "Corte não encontrado." });
+    }
+  } catch (error) {
+    console.error("Falha ao verificar propriedade do corte:", error.message);
+    return res.status(503).json({ error: "auth_storage_unavailable", message: "Não foi possível verificar a propriedade do corte." });
+  }
+
+  const cutPath = path.join(uploadDirectory, `${cutId}.mp4`);
+  try {
+    await fs.promises.access(cutPath, fs.constants.R_OK);
+    res.setHeader("Cache-Control", "private, no-store");
+    return res.sendFile(cutPath, {
+      headers: {
+        "Content-Type": "video/mp4",
+        "Content-Disposition": "inline"
+      }
+    });
+  } catch {
+    return res.status(404).json({
+      error: "cut_not_found",
+      message: "Corte não encontrado. Gere o corte novamente."
+    });
   }
 });
 
