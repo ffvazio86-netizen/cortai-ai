@@ -1,19 +1,20 @@
 # Cort-AI
 
-Site responsivo para iniciar a criação de cortes verticais a partir de links públicos do YouTube e Twitch que o usuário tenha autorização para processar.
+Site responsivo em português para gerar três cortes verticais a partir de links públicos do YouTube e da Twitch, com confirmação de autorização.
 
-## MVP inicial
-- Interface em português, responsiva para computador e celular.
-- Aceita links de YouTube e Twitch.
-- Exige confirmação de autorização para processar o vídeo.
-- Backend Express com status de processamento.
-- Usa `yt-dlp` para obter a mídia e `ffmpeg/ffprobe` para gerar três MP4 verticais 1080x1920, sem legendas.
-- Os arquivos são apresentados para download.
+## O que o MVP faz
+- Aceita links do YouTube e da Twitch.
+- Exige confirmação de autorização antes do processamento.
+- Usa `yt-dlp` para obter o vídeo e `ffmpeg/ffprobe` para gerar três MP4 verticais (1080×1920), sem legendas.
+- Cria trechos de 1 a 5 minutos, conforme a duração do vídeo.
+- Mostra o andamento e oferece links para baixar os arquivos.
+- Permite apenas um processamento por vez.
+- Limita o armazenamento padrão a 5 GiB, reserva espaço para um novo processamento e remove automaticamente arquivos de cortes com mais de 24 horas.
 
-## Importante: estágio do produto
-Esta é a primeira implementação do fluxo real, ainda **não validada em execução neste ambiente**. O MVP distribui os três trechos ao longo do vídeo; ele ainda não reconhece semanticamente os “melhores momentos” com IA. A seleção inteligente será uma etapa posterior, depois que a geração básica funcionar.
+## Limitações importantes
+Os trechos são distribuídos ao longo do vídeo; **esta versão ainda não usa IA para identificar semanticamente os melhores momentos**. O processamento real de vídeo ainda precisa ser validado com links públicos que possam ser acessados legalmente. A CI verifica os testes da API e o endpoint de saúde, mas não baixa nem processa um vídeo real.
 
-O processamento depende de `yt-dlp`, `ffmpeg` e `ffprobe` disponíveis no servidor. Links privados, restritos por idade/região, transmissões ao vivo ou vídeos que a ferramenta não consiga acessar podem falhar. O servidor precisa de armazenamento e memória suficientes para os vídeos.
+Links privados, restritos por idade/região, transmissões ao vivo ou vídeos que a ferramenta não consiga acessar podem falhar. O servidor precisa de CPU, memória e armazenamento suficientes.
 
 Use somente vídeos que você possui ou para os quais tem permissão de baixar, editar e publicar. Respeite os termos do YouTube/Twitch e os direitos do criador. Não contorne paywalls, autenticação ou restrições de acesso.
 
@@ -26,7 +27,15 @@ npm test
 npm start
 ```
 
-Abra `http://localhost:3000`.
+Abra http://localhost:3000.
+
+## Configuração de armazenamento
+Variáveis opcionais:
+- `PORT`: porta HTTP (padrão `3000`).
+- `CORTAI_DATA_DIR`: diretório dos arquivos temporários e cortes.
+- `CORTAI_MAX_STORAGE_BYTES`: limite de armazenamento de cortes (padrão 5 GiB).
+- `CORTAI_RESERVED_JOB_BYTES`: espaço reservado para o próximo processamento (padrão 1 GiB).
+- `CORTAI_OUTPUT_RETENTION_MS`: tempo de retenção dos cortes (padrão 24 horas em milissegundos).
 
 ## Docker
 ```sh
@@ -34,11 +43,10 @@ docker build -t cortai .
 docker run --rm -p 3000:3000 -v cortai-data:/data cortai
 ```
 
-Defina `CORTAI_DATA_DIR` para um volume persistente em produção. Os jobs ficam na memória e os arquivos gerados não têm limpeza automática nesta versão, então é necessário monitorar armazenamento e reiniciar o serviço após manutenção.
-
 ## API
 - `GET /api/health`: health check.
 - `POST /api/cuts`: body JSON `{"url":"https://youtu.be/...","authorized":true}`.
 - `GET /api/jobs/:id`: status e links dos cortes.
 
-Não há login ou isolamento de arquivos por usuário nesta versão. Não a exponha publicamente sem acrescentar autenticação, limites de armazenamento, limpeza automática, proteção contra abuso e uma fila persistente.
+## Antes de disponibilizar publicamente
+Esta versão não possui login, fila persistente nem isolamento de arquivos por usuário. Os status dos jobs ficam na memória e reiniciar o servidor apaga esse histórico. Antes de uma publicação pública, é necessário implementar autenticação/limites por usuário, proteção contra abuso, monitoramento e uma política de privacidade adequada.
