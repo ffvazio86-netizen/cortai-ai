@@ -1,12 +1,19 @@
 FROM node:22-bookworm-slim
 
-# Use the current upstream yt-dlp release rather than Debian's potentially
-# outdated package, which can fail when YouTube changes its endpoints.
+# Tools for video processing and the officially documented yt-dlp PO Token
+# provider. The provider is used as a local script, so no public token server
+# or extra exposed port is needed.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ffmpeg ca-certificates curl \
-  && curl -fL --retry 3 --retry-delay 2 https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux -o /usr/local/bin/yt-dlp \
-  && chmod 0755 /usr/local/bin/yt-dlp \
-  && rm -rf /var/lib/apt/lists/*
+  && apt-get install -y --no-install-recommends \
+    ffmpeg ca-certificates curl git python3 python3-pip build-essential \
+    pkg-config libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev \
+  && python3 -m pip install --break-system-packages --no-cache-dir yt-dlp bgutil-ytdlp-pot-provider==2.0.2 \
+  && git clone --depth 1 --branch 2.0.2 https://github.com/Brainicism/bgutil-ytdlp-pot-provider.git /opt/bgutil-ytdlp-pot-provider \
+  && cd /opt/bgutil-ytdlp-pot-provider/server \
+  && npm ci \
+  && npx tsc \
+  && apt-get clean \
+  && rm -rf /var/lib/apt/lists/* /root/.cache
 
 WORKDIR /app
 COPY package*.json ./
