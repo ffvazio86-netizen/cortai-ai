@@ -272,86 +272,69 @@ function registerRoutes(app, rateLimit) {
     res.json({ authenticated: Boolean(req.user), user: req.user || null });
   });
 
-  app.post("/api/auth/register", limiter, async (req, res) => {
-    if (!checkOrigin(req, res) || authConfigError(res)) return;
-    const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
-    const password = typeof req.body?.password === "string" ? req.body.password : "";
-    if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return res.status(400).json({ error: "invalid_email", message: "Informe um e-mail válido." });
-    }
-    if (password.length < 1 || password.length > 128) {
-      return res.status(400).json({ error: "invalid_password", message: "Informe uma senha com até 128 caracteres." });
-    }
-    try {
-      const id = crypto.randomUUID();
-      const passwordHash = await hashPassword(password);
-      database().prepare("INSERT INTO users(id, email, password_hash, created_at) VALUES (?, ?, ?, ?)")
-        .run(id, email, passwordHash, Date.now());
-      createSession(id, res);
-      return res.status(201).json({ message: "Conta criada com sucesso.", user: { id, email } });
-    } catch (error) {
-      if (String(error.message).includes("UNIQUE constraint failed: users.email")) {
-        return res.status(409).json({ error: "email_already_registered", message: "Não foi possível criar a conta com esse e-mail. Se já tiver conta, entre." });
-      }
-      console.error("Falha no cadastro:", error.message);
-      return res.status(503).json({ error: "auth_storage_unavailable", message: "Não foi possível criar a conta agora." });
-    }
+  app.post("/api/auth/register", limiter, (req, res) => {
+    if (!checkOrigin(req, res)) return;
+    return res.status(410).json({
+      error: "registration_disabled",
+      message: "O cadastro foi desativado. Entre com o usuário e a senha fornecidos."
+    });
   });
 
   app.post("/api/auth/login", limiter, async (req, res) => {
     if (!checkOrigin(req, res) || authConfigError(res)) return;
-    const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
+    const username = typeof req.body?.username === "string" ? req.body.username.trim() : "";
     const password = typeof req.body?.password === "string" ? req.body.password : "";
-    if (!email || !password || email.length > 254 || password.length > 128) {
-      return res.status(400).json({ error: "invalid_credentials", message: "Informe e-mail e senha." });
+    if (username !== "grego" || password !== "grego") {
+      return res.status(401).json({
+        error: "invalid_credentials",
+        message: "Usuário ou senha incorretos."
+      });
     }
     try {
-      const row = database().prepare("SELECT id, email, password_hash, created_at FROM users WHERE email = ? COLLATE NOCASE").get(email);
-      const valid = row?.password_hash ? await verifyPassword(password, row.password_hash) : false;
-      if (!valid) return res.status(401).json({ error: "invalid_credentials", message: "E-mail ou senha incorretos." });
+      const store = database();
+      const email = "grego@cortai.local";
+      let row = store.prepare("SELECT id, email, password_hash, created_at FROM users WHERE email = ? COLLATE NOCASE").get(email);
+      if (!row) {
+        const id = crypto.randomUUID();
+        const passwordHash = await hashPassword(password);
+        store.prepare("INSERT INTO users(id, email, password_hash, created_at) VALUES (?, ?, ?, ?)")
+          .run(id, email, passwordHash, Date.now());
+        row = store.prepare("SELECT id, email, password_hash, created_at FROM users WHERE id = ?").get(id);
+      }
       const existing = parseCookies(req.headers.cookie)[COOKIE];
-      if (existing) database().prepare("DELETE FROM sessions WHERE token_hash = ?").run(hashToken(existing));
+      if (existing) store.prepare("DELETE FROM sessions WHERE token_hash = ?").run(hashToken(existing));
       createSession(row.id, res);
-      return res.json({ message: "Login realizado com sucesso.", user: publicUser(row) });
+      return res.json({
+        message: "Login realizado com sucesso.",
+        user: { id: row.id, username: "grego", email: "grego" }
+      });
     } catch (error) {
       console.error("Falha no login:", error.message);
-      return res.status(503).json({ error: "auth_storage_unavailable", message: "Não foi possível entrar agora." });
+      return res.status(503).json({
+        error: "auth_storage_unavailable",
+        message: "Não foi possível entrar agora. Verifique a configuração de autenticação do servidor."
+      });
     }
   });
 
-  app.post("/api/auth/google", limiter, async (req, res) => {
-    if (!checkOrigin(req, res) || authConfigError(res)) return;
-    if (!process.env.GOOGLE_CLIENT_ID) {
-      return res.status(503).json({ error: "google_not_configured", message: "Login com Google ainda não foi configurado." });
-    }
-    try {
-      const identity = await verifyGoogleCredential(req.body?.credential);
-      const store = database();
-      let row = store.prepare("SELECT id, email, google_sub, created_at FROM users WHERE google_sub = ?").get(identity.sub);
-      if (!row) {
-        const existing = store.prepare("SELECT id, email, google_sub, created_at FROM users WHERE email = ? COLLATE NOCASE").get(identity.email);
-        if (existing) {
-          if (existing.google_sub && existing.google_sub !== identity.sub) {
-            return res.status(409).json({ error: "google_account_conflict", message: "Este e-mail já está associado a outra conta Google." });
-          }
-          store.prepare("UPDATE users SET google_sub = ? WHERE id = ?").run(identity.sub, existing.id);
-          row = { ...existing, google_sub: identity.sub };
-        } else {
-          const id = crypto.randomUUID();
-          store.prepare("INSERT INTO users(id, email, google_sub, created_at) VALUES (?, ?, ?, ?)")
-            .run(id, identity.email, identity.sub, Date.now());
-          row = store.prepare("SELECT id, email, google_sub, created_at FROM users WHERE id = ?").get(id);
-        }
-      }
-      createSession(row.id, res);
-      return res.json({ message: "Login com Google realizado com sucesso.", user: publicUser(row) });
-    } catch (error) {
-      if (error.code === "INVALID_GOOGLE_CREDENTIAL") {
-        return res.status(401).json({ error: "invalid_google_credential", message: "Não foi possível validar sua conta Google." });
-      }
-      console.error("Falha no login Google:", error.message);
-      return res.status(503).json({ error: "google_login_unavailable", message: "O login com Google está temporariamente indisponível." });
-    }
+  app.post("/api/auth/google", limiter, (req, res) => {
+    if (!checkOrigin(req, res)) return;
+    return res.status(410).json({
+      error: "google_login_disabled",
+      message: "O login com Google foi desativado."
+    });
+  });
+
+  app.get("/api/auth/config", (_req, res) => {
+    res.set("Cache-Control", "no-store");
+    res.json({ googleClientId: "" });
+  });
+
+  app.get("/api/auth/me", authenticate, (req, res) => {
+    res.json({
+      authenticated: Boolean(req.user),
+      user: req.user ? { id: req.user.id, username: "grego", email: "grego" } : null
+    });
   });
 
   app.post("/api/auth/logout", authenticate, (req, res) => {
