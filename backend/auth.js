@@ -95,7 +95,14 @@ function checkOrigin(req, res) {
   if (!origin) return true;
   let expected;
   try {
-    expected = new URL(process.env.CORTAI_ALLOWED_ORIGIN || process.env.CORTAI_PUBLIC_ORIGIN || `${req.protocol}://${req.get("host")}`).origin;
+    // Render terminates HTTPS at its proxy, so Express may see HTTP internally.
+    // Prefer explicit origins; otherwise honor Render's forwarded HTTPS protocol
+    // when deriving the same-origin fallback.
+    const forwardedProto = req.get("x-forwarded-proto")?.split(",")[0].trim();
+    const requestProtocol = process.env.TRUST_PROXY === "1"
+      ? req.protocol
+      : (forwardedProto === "https" ? "https" : req.protocol);
+    expected = new URL(process.env.CORTAI_ALLOWED_ORIGIN || process.env.CORTAI_PUBLIC_ORIGIN || `${requestProtocol}://${req.get("host")}`).origin;
   } catch {
     res.status(403).json({ error: "invalid_origin", message: "Origem inválida." });
     return false;
