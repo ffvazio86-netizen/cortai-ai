@@ -72,3 +72,6 @@ jobs:
           cat /tmp/cortai-server.log
           echo "O servidor não respondeu ao endpoint /api/health."
           exit 1
+
+      - name: Validar build da imagem Docker
+        run: docker build --tag cortai:test .
