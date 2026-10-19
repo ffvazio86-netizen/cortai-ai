@@ -77,7 +77,7 @@ async function createCuts(job) {
     job.message = "Analisando duração do vídeo…";
     const probe = await run("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", videoPath]);
     const duration = Number(probe.stdout.trim());
-    if (!Number.isFinite(duration) || duration < 60) throw new Error("O vídeo precisa ter pelo menos 1 minuto.");
+    if (!Number.isFinite(duration) || duration < 180) throw new Error("Para criar 3 cortes de pelo menos 1 minuto, o vídeo precisa ter no mínimo 3 minutos.");
     const clipLength = Math.min(180, 300, Math.floor(duration / 3));
     if (clipLength < 60) throw new Error("Não foi possível selecionar um trecho de pelo menos 1 minuto.");
 
