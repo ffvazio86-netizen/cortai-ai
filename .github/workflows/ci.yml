@@ -68,7 +68,7 @@ jobs:
           for attempt in $(seq 1 30); do
             if curl --fail --silent http://127.0.0.1:3100/api/health > /tmp/cortai-docker-health.json; then
               cat /tmp/cortai-docker-health.json
-              grep -q '\"ok\":true' /tmp/cortai-docker-health.json
+              grep -q '"ok":true' /tmp/cortai-docker-health.json
               exit 0
             fi
             sleep 1
