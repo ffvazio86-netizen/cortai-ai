@@ -22,7 +22,7 @@
       <section class="intro">
         <div class="eyebrow"><span class="dot"></span> transforme vídeos em cortes</div>
         <h1>O momento certo.<br><span>No formato certo.</span></h1>
-        <p class="lead">Cole um link do YouTube ou Twitch e prepare cortes verticais prontos para redes sociais. Sem legendas, sem editor complicado.</p>
+        <p class="lead">Cole um link do YouTube ou Twitch ou envie um arquivo de vídeo. Gere cortes verticais prontos para redes sociais, sem legendas.</p>
         <div class="features">
           <div class="feature"><div class="ico">▣</div><b>Formato vertical</b><p>Vídeo 9:16 para celular e redes sociais.</p></div>
           <div class="feature"><div class="ico">◷</div><b>1 a 5 minutos</b><p>Trechos com duração automática.</p></div>
@@ -31,10 +31,10 @@
       </section>
       <section class="panel">
         <h2>Crie seus cortes</h2>
-        <p class="sub">Cole o link do vídeo que você tem permissão para processar.</p>
+        <p class="sub">Cole um link público ou envie um vídeo do seu computador (MP4, MOV, WebM ou MKV, até 100 MB). O YouTube pode bloquear downloads feitos por servidores.</p>
         <form id="form">
           <label class="field-label" for="url">Link do YouTube ou Twitch</label>
-          <input id="url" name="url" type="url" placeholder="https://youtube.com/watch?v=..." required autocomplete="url">
+          <input id="url" name="url" type="url" placeholder="https://youtube.com/watch?v=..." autocomplete="url">\n          <div style="text-align:center;color:var(--muted);font-size:12px;margin:12px 0">OU ENVIE UM ARQUIVO</div>\n          <label class="field-label" for="video">Arquivo de vídeo (até 100 MB)</label>\n          <input id="video" name="video" type="file" accept=".mp4,.mov,.webm,.mkv,video/mp4,video/quicktime,video/webm,video/x-matroska" style="width:100%;background:#101115;border:1px solid #3a3c45;border-radius:12px;padding:12px;color:white;font:inherit">
           <button class="submit" id="submit" type="submit">Gerar meus 3 cortes <span aria-hidden="true">→</span></button>
           <label class="consent"><input id="authorized" type="checkbox" required><span>Confirmo que tenho autorização para processar este vídeo e que seu uso respeita os direitos do criador e as regras da plataforma.</span></label>
         </form>
@@ -46,13 +46,20 @@
   </main>
   <footer><div class="wrap">Cort-AI · Feito para simplificar a criação de vídeos curtos. <br>Esta versão inicial ainda não usa IA semântica para reconhecer os melhores momentos; o processamento real será validado no primeiro teste.</div></footer>
 <script>
-const form=document.querySelector("#form"),urlInput=document.querySelector("#url"),submit=document.querySelector("#submit"),message=document.querySelector("#message"),progress=document.querySelector("#progress"),bar=document.querySelector("#bar"),results=document.querySelector("#results");
+const form=document.querySelector("#form"),urlInput=document.querySelector("#url"),videoInput=document.querySelector("#video"),submit=document.querySelector("#submit"),message=document.querySelector("#message"),progress=document.querySelector("#progress"),bar=document.querySelector("#bar"),results=document.querySelector("#results");
 function showMessage(text,error=false){message.textContent=text;message.className="message show"+(error?" error":"")}
 function formatTime(seconds){const m=Math.floor(seconds/60),s=Math.floor(seconds%60);return m+":"+String(s).padStart(2,"0")}
 form.addEventListener("submit",async e=>{
- e.preventDefault();results.innerHTML="";bar.style.width="0%";progress.hidden=false;submit.disabled=true;submit.textContent="Preparando…";showMessage("Enviando o link para o Cort-AI…");
+ e.preventDefault();results.innerHTML="";bar.style.width="0%";progress.hidden=false;submit.disabled=true;submit.textContent="Preparando…";
  try{
-  const response=await fetch("/api/cuts",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:urlInput.value.trim(),authorized:document.querySelector("#authorized").checked})});
+  const videoFile=videoInput.files[0];
+  const link=urlInput.value.trim();
+  if(!videoFile&&!link)throw new Error("Cole um link ou selecione um arquivo de vídeo.");
+  if(videoFile&&videoFile.size>100*1024*1024)throw new Error("O arquivo precisa ter no máximo 100 MB.");
+  showMessage(videoFile?"Enviando o arquivo para o Cort-AI…":"Enviando o link para o Cort-AI…");
+  const response=videoFile
+   ? await fetch("/api/upload?authorized="+document.querySelector("#authorized").checked+"&filename="+encodeURIComponent(videoFile.name),{method:"POST",headers:{"Content-Type":"application/octet-stream"},body:videoFile})
+   : await fetch("/api/cuts",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:link,authorized:document.querySelector("#authorized").checked})});
   const data=await response.json();if(!response.ok)throw new Error(data.error||"Não foi possível iniciar.");
   showMessage("Processamento iniciado. Não feche esta página enquanto os cortes são gerados.");
   let finished=false;
