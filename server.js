@@ -1,8 +1,8 @@
 import express from "express";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { randomUUID } from "node:crypto";
-import { mkdir, readdir, rm, stat } from "node:fs/promises";
+import { mkdir, readdir, rm } from "node:fs/promises";
 import { spawn } from "node:child_process";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -22,7 +22,7 @@ app.use("/cuts", express.static(OUTPUT_DIR, { fallthrough: false, index: false, 
 function validVideoUrl(raw) {
   try {
     const url = new URL(raw);
-    const host = url.hostname.toLowerCase().replace(/^www\./, "").replace(/^m\./, "");
+    const host = url.hostname.toLowerCase().replace(/^www\\./, "").replace(/^m\\./, "");
     if (url.protocol !== "https:" && url.protocol !== "http:") return false;
     if (host === "youtube.com" || host === "youtu.be" || host === "m.youtube.com" || host === "youtube-nocookie.com" || host === "twitch.tv" || host === "m.twitch.tv" || host === "clips.twitch.tv") return true;
     return false;
@@ -37,11 +37,11 @@ function run(command, args, { timeoutMs = 30 * 60 * 1000 } = {}) {
     const timer = setTimeout(() => child.kill("SIGKILL"), timeoutMs);
     child.stdout.on("data", chunk => { stdout = (stdout + chunk.toString()).slice(-12000); });
     child.stderr.on("data", chunk => { stderr = (stderr + chunk.toString()).slice(-12000); });
-    child.on("error", error => { clearTimeout(timer); reject(new Error(`Não foi possível executar ${command}. Verifique se está instalado.`)); });
+    child.on("error", () => { clearTimeout(timer); reject(new Error(`Não foi possível executar ${command}. Verifique se está instalado.`)); });
     child.on("close", code => {
       clearTimeout(timer);
       if (code === 0) resolve({ stdout, stderr });
-      else reject(new Error(stderr.trim().split("\n").slice(-4).join(" ").slice(-700) || `${command} terminou com código ${code}`));
+      else reject(new Error(stderr.trim().split("\\n").slice(-4).join(" ").slice(-700) || `${command} terminou com código ${code}`));
     });
   });
 }
@@ -70,7 +70,7 @@ async function createCuts(job) {
       "-o", inputPath, job.url
     ]);
     const files = await readdir(source);
-    const videoName = files.find(name => /^source\./.test(name) && !name.endsWith(".part"));
+    const videoName = files.find(name => /^source\\./.test(name) && !name.endsWith(".part"));
     if (!videoName) throw new Error("Não foi possível localizar o vídeo baixado. Verifique se o link está público e acessível.");
     const videoPath = path.join(source, videoName);
 
@@ -132,4 +132,8 @@ app.get("/api/jobs/:id", (req, res) => {
 
 await mkdir(OUTPUT_DIR, { recursive: true });
 await mkdir(TEMP_DIR, { recursive: true });
-app.listen(PORT, () => console.log(`Cort-AI disponível na porta ${PORT}`));
+
+export { app, validVideoUrl };
+
+const isMainModule = process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url;
+if (isMainModule) app.listen(PORT, () => console.log(`Cort-AI disponível na porta ${PORT}`));
