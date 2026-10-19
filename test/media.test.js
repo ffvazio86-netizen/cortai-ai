@@ -12,8 +12,8 @@ test("plans three clips within the requested duration", () => {
   }
 });
 
-test("short source is clipped to its available duration", () => {
-  assert.deepEqual(chooseSegments(45, 1, 60), [{ start: 0, duration: 45 }]);
+test("rejects sources shorter than one minute", () => {
+  assert.throws(() => chooseSegments(45, 1, 60), /at least 60 seconds/);
 });
 
 test("rejects durations outside 1–5 minutes", () => {
