@@ -109,8 +109,8 @@ async function createCuts(job) {
     job.status = "processing";
     job.message = "Verificando ferramentas de vídeo…";
     await findBinary("yt-dlp");
-    await findBinary("ffmpeg");
-    await findBinary("ffprobe");
+    await findBinary("ffmpeg", ["-version"]);
+    await findBinary("ffprobe", ["-version"]);
 
     job.message = "Obtendo o vídeo autorizado…";
     const inputPath = path.join(source, "source.%(ext)s");
