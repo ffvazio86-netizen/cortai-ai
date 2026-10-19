@@ -42,6 +42,9 @@ function chooseSegments(duration, count = 3, clipSeconds = 60) {
   if (!Number.isFinite(clipSeconds) || clipSeconds < 60 || clipSeconds > 300) {
     throw new Error("Clip duration must be between 60 and 300 seconds.");
   }
+  if (duration < 60) {
+    throw new Error("Source video must be at least 60 seconds long.");
+  }
   const actualLength = Math.min(clipSeconds, duration);
   const maxStart = Math.max(0, duration - actualLength);
   if (count === 1 || maxStart === 0) {
