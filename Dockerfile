@@ -1,8 +1,8 @@
 FROM node:22-bookworm-slim
 
 # Tools for video processing and the officially documented yt-dlp PO Token
-# provider. The provider is used as a local script, so no public token server
-# or extra exposed port is needed.
+# provider. The provider runs as a local-only HTTP service on loopback; it is
+# not exposed publicly and does not need an additional Render port.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
     ffmpeg ca-certificates curl git python3 python3-pip build-essential \
