@@ -42,9 +42,15 @@ async function createProject(videoUrl) {
     body: JSON.stringify({
       videoUrl,
       curationPref: {
+        model: "ClipBasic",
         clipDurations: [[60, 300]],
         skipCurate: false,
-        genre: "Auto"
+        genre: "Auto",
+        enableAutoHook: false
+      },
+      renderPref: {
+        layoutAspectRatio: "portrait",
+        enableCaption: false
       }
     })
   });
@@ -61,21 +67,15 @@ async function createProject(videoUrl) {
 
 async function getProjectClips(projectId) {
   const { orgId } = getConfig();
-  if (!orgId) {
-    const error = new Error("OpusClip organization ID is not configured on the server.");
-    error.code = "OPUSCLIP_ORG_NOT_CONFIGURED";
-    throw error;
-  }
   const url = new URL(`${API_BASE}/exportable-clips`);
   url.searchParams.set("q", "findByProjectId");
   url.searchParams.set("projectId", projectId);
 
   const { apiKey } = getConfig();
+  const headers = { Authorization: `Bearer ${apiKey}` };
+  if (orgId) headers["x-opus-org-id"] = orgId;
   const response = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "x-opus-org-id": orgId
-    },
+    headers,
     signal: AbortSignal.timeout(30_000)
   });
   const raw = await response.text();
