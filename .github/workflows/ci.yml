@@ -43,6 +43,11 @@ jobs:
             git push origin HEAD:codex/cortai-rebuild-mvp
           fi
 
+      - name: Instalar FFmpeg para teste de processamento real
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+
       - name: Instalar dependências pelo lockfile
         run: npm ci
 
