@@ -36,7 +36,7 @@
       <form id="link-form">
         <label id="form-title" for="video-url">Cole o link do vídeo</label>
         <input id="video-url" name="url" type="url" placeholder="https://www.youtube.com/... ou https://www.twitch.tv/..." required>
-        <button id="submit" type="submit">Verificar link</button>
+        <button id="submit" type="submit">Gerar cortes</button>
       </form>
       <div class="details">
         <div class="detail"><strong>3 cortes</strong>por vídeo</div>
@@ -65,12 +65,50 @@
           body: JSON.stringify({ url: input.value })
         });
         const result = await response.json();
-        status.textContent = result.message || (result.ok ? "Link verificado." : "Não foi possível verificar.");
+        status.textContent = result.message || (result.ok ? "Projeto enviado." : "Não foi possível iniciar.");
+        if (result.ok && result.projectId) {
+          const projectId = result.projectId;
+          status.textContent = "Projeto enviado para processamento. Aguardando os cortes…";
+          let found = false;
+          for (let attempt = 0; attempt < 24; attempt++) {
+            await new Promise(resolve => setTimeout(resolve, 15000));
+            const clipsResponse = await fetch("/api/projects/" + encodeURIComponent(projectId) + "/clips");
+            const clipsResult = await clipsResponse.json();
+            const clips = Array.isArray(clipsResult.clips) ? clipsResult.clips :
+              Array.isArray(clipsResult.clips?.list) ? clipsResult.clips.list : [];
+            if (clips.length) {
+              status.textContent = "";
+              const heading = document.createElement("p");
+              heading.textContent = "Cortes prontos: " + clips.length;
+              status.appendChild(heading);
+              clips.slice(0, 3).forEach((clip, index) => {
+                const link = clip.uriForExport || clip.uriForPreview;
+                const item = document.createElement("p");
+                if (link && /^https:\/\//i.test(link)) {
+                  const anchor = document.createElement("a");
+                  anchor.href = link;
+                  anchor.target = "_blank";
+                  anchor.rel = "noopener noreferrer";
+                  anchor.textContent = "Abrir corte " + (index + 1) + (clip.title ? " — " + clip.title : "");
+                  item.appendChild(anchor);
+                } else {
+                  item.textContent = "Corte " + (index + 1) + ": " + (clip.title || "processado");
+                }
+                status.appendChild(item);
+              });
+              found = true;
+              break;
+            }
+          }
+          if (!found) {
+            status.textContent = "O projeto foi enviado, mas os cortes ainda não apareceram. Aguarde mais um pouco e tente consultar novamente.";
+          }
+        }
       } catch {
         status.textContent = "Não consegui falar com o servidor. Tente novamente quando o backend estiver no ar.";
       } finally {
         button.disabled = false;
-        button.textContent = "Verificar link";
+        button.textContent = "Gerar cortes";
       }
     });
   </script>
