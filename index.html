@@ -21,30 +21,25 @@
 <nav class="nav"><div class="brand"><div class="logo">✂</div>Cortaí <span class="gradient">AI</span></div><span class="pill">● Feito para celular</span></nav>
 <header class="hero"><div class="eyebrow">✦ GERAÇÃO DE CORTES COM FFMPEG</div><h1>Transforme vídeos em <span class="gradient">cortes virais.</span></h1><p>Cole um link do YouTube ou Twitch. A IA identifica os melhores momentos e escolhe automaticamente a duração de cada corte, entre 1 e 5 minutos.</p></header>
 <section class="panel" id="authPanel">
-<div class="head"><span class="step">00</span> Entre ou crie sua conta</div>
-<p class="fine" style="margin-top:0">Seus vídeos e cortes ficam associados à sua conta.</p>
+<div class="head"><span class="step">00</span> Entrar no Cort-AI</div>
+<p class="fine" style="margin-top:0">Use o usuário e a senha de acesso.</p>
 <div class="opts">
 <div>
-<label class="label" for="authEmail">E-mail</label>
-<input class="url" id="authEmail" type="email" autocomplete="email" maxlength="254" required placeholder="voce@exemplo.com">
+<label class="label" for="authUsername">Usuário</label>
+<input class="url" id="authUsername" type="text" autocomplete="username" maxlength="64" required placeholder="Usuário">
 </div>
 <div>
 <label class="label" for="authPassword">Senha</label>
-<input class="url" id="authPassword" type="password" autocomplete="current-password" maxlength="128" required placeholder="Sua senha">
+<input class="url" id="authPassword" type="password" autocomplete="current-password" maxlength="128" required placeholder="Senha">
 </div>
 </div>
 <div class="clipactions" style="margin-top:14px">
 <button type="button" id="loginButton">Entrar</button>
-<button type="button" id="registerButton">Criar conta</button>
-</div>
-<div id="googleSection" hidden>
-<div style="margin:16px 0;text-align:center;color:var(--muted);font-size:12px">ou continue com Google</div>
-<div id="googleSignIn"></div>
 </div>
 <div class="status" id="authStatus" role="status"></div>
 </section>
 <section class="panel" id="accountPanel" hidden>
-<div class="head"><span class="step">✓</span> Sua conta</div>
+<div class="head"><span class="step">✓</span> Sessão ativa</div>
 <div class="opts"><p id="accountEmail" style="margin:0;overflow-wrap:anywhere"></p><button type="button" id="logoutButton">Sair</button></div>
 </section>
 <section class="panel" id="appPanel" hidden>
@@ -85,7 +80,7 @@ async function authRequest(path,payload){
 function showSignedIn(user){
  authUser=user;
  $('authPanel').hidden=true;$('accountPanel').hidden=false;$('appPanel').hidden=false;
- $('accountEmail').textContent='Conectado como '+user.email;
+ $('accountEmail').textContent='Conectado como '+(user.username||'grego');
 }
 function showSignedOut(){
  authUser=null;
@@ -101,51 +96,20 @@ async function refreshAuth(){
 $('loginButton').addEventListener('click',async()=>{
  try{
   $('loginButton').disabled=true;
-  const data=await authRequest('/api/auth/login',{email:$('authEmail').value,password:$('authPassword').value});
-  showSignedIn(data.user);authMessage('Login realizado.');
- }catch(error){authMessage(error.message,true);}
- finally{$('loginButton').disabled=false;}
-});
-$('registerButton').addEventListener('click',async()=>{
- try{
-  $('registerButton').disabled=true;
-  const data=await authRequest('/api/auth/register',{email:$('authEmail').value,password:$('authPassword').value});
+  const data=await authRequest('/api/auth/login',{username:$('authUsername').value,password:$('authPassword').value});
   showSignedIn(data.user);
  }catch(error){authMessage(error.message,true);}
- finally{$('registerButton').disabled=false;}
+ finally{$('loginButton').disabled=false;}
 });
 $('logoutButton').addEventListener('click',async()=>{
  try{
   const response=await fetch(API_BASE+'/api/auth/logout',{method:'POST',credentials:'include'});
   const data=await response.json().catch(()=>({}));
   if(!response.ok)throw new Error(data.message||'Não foi possível sair.');
-  showSignedOut();authMessage('Você saiu da sua conta.');
+  showSignedOut();authMessage('Você saiu da sua sessão.');
  }catch(error){authMessage(error.message,true);}
 });
-async function setupGoogleSignIn(){
- try{
-  const response=await fetch(API_BASE+'/api/auth/config',{cache:'no-store',credentials:'include'});
-  const config=await response.json();
-  if(!response.ok||!config.googleClientId)return;
-  $('googleSection').hidden=false;
-  window.handleCortaiGoogleCredential=async(result)=>{
-   try{
-    const data=await authRequest('/api/auth/google',{credential:result.credential});
-    showSignedIn(data.user);
-   }catch(error){authMessage(error.message,true);}
-  };
-  const script=document.createElement('script');
-  script.src='https://accounts.google.com/gsi/client';script.async=true;script.defer=true;
-  script.onload=()=>{
-   if(!window.google?.accounts?.id)return;
-   window.google.accounts.id.initialize({client_id:config.googleClientId,callback:window.handleCortaiGoogleCredential});
-   window.google.accounts.id.renderButton($('googleSignIn'),{theme:'outline',size:'large',shape:'rectangular',text:'continue_with',width:280});
-  };
-  script.onerror=()=>authMessage('Não foi possível carregar o login do Google.',true);
-  document.head.appendChild(script);
- }catch{ /* Google sign-in stays hidden until configured. */ }
-}
-refreshAuth();setupGoogleSignIn();
+refreshAuth();
 function showStatus(message,isError=false){const s=$('status');s.className='status show';s.textContent=message;s.style.borderColor=isError?'#b91c1c':'';}
 function showStatus(message,isError=false){
  const s=$('status');s.className='status show';s.textContent=message;s.style.borderColor=isError?'#b91c1c':'';
