@@ -11,7 +11,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ffmpegCheck = spawnSync("ffmpeg", ["-version"], { stdio: "ignore" });
 const canRun = process.platform === "linux" && ffmpegCheck.status === 0;
 
-test("processa um vídeo de teste e disponibiliza três MP4 verticais", { skip: !canRun && "Requer Linux e FFmpeg (instalados no CI)." }, async t => {
+test("processa um vídeo de teste e disponibiliza três MP4 verticais", { skip: !canRun && "Requer Linux e FFmpeg (instalados no CI).", timeout: 180000 }, async t => {
   const temp = await mkdtemp(path.join(os.tmpdir(), "cortai-e2e-"));
   let serverProcess;
   let baseUrl;
