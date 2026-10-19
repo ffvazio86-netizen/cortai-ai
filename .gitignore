@@ -1,0 +1,12 @@
+node_modules/
+.env
+.env.*
+!.env.example
+coverage/
+npm-debug.log*
+.DS_Store
+
+# Temporary video files (future processing)
+tmp/
+uploads/
+outputs/
