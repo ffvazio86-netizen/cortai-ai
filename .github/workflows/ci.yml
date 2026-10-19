@@ -1,5 +1,9 @@
 name: Cort-AI CI
 
+concurrency:
+  group: cortai-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches:
