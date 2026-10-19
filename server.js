@@ -125,7 +125,7 @@ async function createCuts(job) {
           "--force-ipv4", "--retries", "3", "--fragment-retries", "3",
           "--extractor-retries", "3", "--retry-sleep", "http:2",
           "--remote-components", "ejs:github",
-          "--extractor-args", "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416;disable_innertube=1",
+          "--extractor-args", "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416",
           "-f", "bv*+ba/b", "--merge-output-format", "mp4",
           "-o", inputPath, job.url
         ]);
