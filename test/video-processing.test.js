@@ -2,7 +2,7 @@ import test, { before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { spawn, spawnSync } from "node:child_process";
-import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -119,6 +119,26 @@ fs.copyFileSync(process.env.CORTAI_FIXTURE_VIDEO, output);
       assert.equal(metadata.status, 0, metadata.stderr);
       assert.equal(metadata.stdout.trim(), "1080x1920");
     }
+
+    // Verify the upload fallback works without calling yt-dlp (useful when YouTube
+    // blocks downloads from cloud-server IP addresses).
+    const uploadResponse = await fetch(`${baseUrl}/api/upload?authorized=true&filename=fixture.mp4`, {
+      method: "POST",
+      headers: { "content-type": "application/octet-stream" },
+      body: await readFile(fixture)
+    });
+    const uploadBody = await uploadResponse.text();
+    assert.equal(uploadResponse.status, 202, uploadBody);
+    const uploadedJobId = JSON.parse(uploadBody).jobId;
+    let uploadedJob;
+    for (let attempt = 0; attempt < 240; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      const response = await fetch(`${baseUrl}/api/jobs/${uploadedJobId}`);
+      uploadedJob = await response.json();
+      if (uploadedJob.status === "done" || uploadedJob.status === "error") break;
+    }
+    assert.equal(uploadedJob?.status, "done", `Geração por upload falhou: ${uploadedJob?.message || "tempo esgotado"}`);
+    assert.equal(uploadedJob.cuts.length, 3);
   } finally {
     if (serverProcess && serverProcess.exitCode === null) {
       serverProcess.kill("SIGTERM");
