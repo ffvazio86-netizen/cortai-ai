@@ -91,8 +91,9 @@ fs.copyFileSync(process.env.CORTAI_FIXTURE_VIDEO, output);
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ url: "https://youtu.be/test-fixture", authorized: true })
     });
-    assert.equal(startResponse.status, 202, await startResponse.text());
-    const { jobId } = await startResponse.json();
+    const startBody = await startResponse.text();
+    assert.equal(startResponse.status, 202, startBody);
+    const { jobId } = JSON.parse(startBody);
     let job;
     for (let attempt = 0; attempt < 240; attempt++) {
       await new Promise(resolve => setTimeout(resolve, 500));
