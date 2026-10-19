@@ -126,7 +126,7 @@ async function createCuts(job) {
       const inputPath = path.join(source, "source.%(ext)s");
       try {
         await run("yt-dlp", [
-          "--no-playlist", "--no-progress", "--max-filesize", "2G",
+          "--no-playlist", "--no-progress", "--verbose", "--max-filesize", "2G",
           "--force-ipv4", "--retries", "3", "--fragment-retries", "3",
           "--extractor-retries", "3", "--retry-sleep", "http:2",
           "--remote-components", "ejs:github",
