@@ -128,7 +128,7 @@ async function createCuts(job) {
     const probe = await run("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", videoPath]);
     const duration = Number(probe.stdout.trim());
     if (!Number.isFinite(duration) || duration < 180) throw new Error("Para criar 3 cortes de pelo menos 1 minuto, o vídeo precisa ter no mínimo 3 minutos.");
-    const clipLength = Math.min(180, 300, Math.floor(duration / 3));
+    const clipLength = Math.min(300, Math.floor(duration / 3));
     if (clipLength < 60) throw new Error("Não foi possível selecionar um trecho de pelo menos 1 minuto.");
 
     // MVP: três trechos distribuídos pelo vídeo. A seleção semântica de melhores momentos
@@ -168,15 +168,16 @@ app.post("/api/cuts", async (req, res) => {
   if (!validVideoUrl(url)) return res.status(400).json({ error: "Cole um link válido do YouTube ou da Twitch." });
   if (req.body?.authorized !== true) return res.status(400).json({ error: "Confirme que você tem autorização para processar este vídeo." });
   if (activeJobs >= MAX_ACTIVE_JOBS) return res.status(429).json({ error: "Já existe um vídeo sendo processado. Tente novamente em alguns minutos." });
+  activeJobs++;
   try {
     await enforceStorageLimit();
   } catch (error) {
+    activeJobs = Math.max(0, activeJobs - 1);
     return res.status(error.statusCode || 500).json({ error: error.message || "Não foi possível verificar o armazenamento." });
   }
   const job = { id: randomUUID(), url, status: "queued", progress: 0, message: "Preparando processamento…", cuts: [] };
   jobs.set(job.id, job);
   pruneJobHistory();
-  activeJobs++;
   res.status(202).json({ jobId: job.id, status: job.status });
   createCuts(job)
     .catch(error => { job.status = "error"; job.message = error.message || "Falha ao gerar os cortes."; })
