@@ -2,7 +2,7 @@ import express from "express";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { randomUUID } from "node:crypto";
-import { mkdir, readdir, rm, stat } from "node:fs/promises";
+import { mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -108,22 +108,37 @@ async function createCuts(job) {
     await enforceStorageLimit();
     job.status = "processing";
     job.message = "Verificando ferramentas de vídeo…";
-    await findBinary("yt-dlp");
     await findBinary("ffmpeg", ["-version"]);
     await findBinary("ffprobe", ["-version"]);
 
-    job.message = "Obtendo o vídeo autorizado…";
-    const inputPath = path.join(source, "source.%(ext)s");
-    await run("yt-dlp", [
-      "--no-playlist", "--no-progress", "--max-filesize", "2G",
-      "-f", "bv*+ba/b", "--merge-output-format", "mp4",
-      "-o", inputPath, job.url
-    ]);
-    const files = await readdir(source);
-    const videoName = files.find(name => /^source\./.test(name) && !name.endsWith(".part"));
-    if (!videoName) throw new Error("Não foi possível localizar o vídeo baixado. Verifique se o link está público e acessível.");
+    let videoPath;
+    if (job.uploadedPath) {
+      videoPath = job.uploadedPath;
+      job.message = "Validando o vídeo enviado…";
+    } else {
+      await findBinary("yt-dlp");
+      job.message = "Obtendo o vídeo autorizado…";
+      const inputPath = path.join(source, "source.%(ext)s");
+      try {
+        await run("yt-dlp", [
+          "--no-playlist", "--no-progress", "--max-filesize", "2G",
+          "--extractor-args", "youtube:player_client=tv",
+          "-f", "bv*+ba/b", "--merge-output-format", "mp4",
+          "-o", inputPath, job.url
+        ]);
+      } catch (error) {
+        const details = error.message || "";
+        if (/HTTP Error 429|HTTP Error 403|Unable to download API page/i.test(details)) {
+          throw new Error("O YouTube bloqueou o download a partir do servidor (HTTP 403/429). Tente enviar o arquivo de vídeo diretamente pelo formulário; atualizar o yt-dlp ou tentar outro método não garante remover o bloqueio do IP.");
+        }
+        throw error;
+      }
+      const files = await readdir(source);
+      const videoName = files.find(name => /^source\./.test(name) && !name.endsWith(".part"));
+      if (!videoName) throw new Error("Não foi possível localizar o vídeo baixado. Verifique se o link está público e acessível.");
+      videoPath = path.join(source, videoName);
+    }
     await enforceStorageLimit();
-    const videoPath = path.join(source, videoName);
 
     job.message = "Analisando duração do vídeo…";
     const probe = await run("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", videoPath]);
@@ -164,6 +179,41 @@ async function createCuts(job) {
 }
 
 app.get("/api/health", (_req, res) => res.json({ ok: true, service: "Cort-AI", version: "1.0.0" }));
+
+app.post("/api/upload", express.raw({ type: "application/octet-stream", limit: "100mb" }), async (req, res) => {
+  const authorized = req.query?.authorized === "true";
+  const filename = typeof req.query?.filename === "string" ? path.basename(req.query.filename) : "";
+  const extension = path.extname(filename).toLowerCase();
+  if (!authorized) return res.status(400).json({ error: "Confirme que você tem autorização para processar este vídeo." });
+  if (![".mp4", ".mov", ".webm", ".mkv"].includes(extension)) {
+    return res.status(400).json({ error: "Envie um arquivo MP4, MOV, WebM ou MKV." });
+  }
+  if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+    return res.status(400).json({ error: "O arquivo enviado está vazio ou não foi recebido." });
+  }
+  if (activeJobs >= MAX_ACTIVE_JOBS) return res.status(429).json({ error: "Já existe um vídeo sendo processado. Tente novamente em alguns minutos." });
+  activeJobs++;
+  let source;
+  try {
+    await enforceStorageLimit();
+    const id = randomUUID();
+    source = path.join(TEMP_DIR, id);
+    await mkdir(source, { recursive: true });
+    const uploadedPath = path.join(source, `uploaded${extension}`);
+    await writeFile(uploadedPath, req.body, { flag: "wx" });
+    const job = { id, uploadedPath, status: "queued", progress: 0, message: "Preparando o vídeo enviado…", cuts: [] };
+    jobs.set(id, job);
+    pruneJobHistory();
+    res.status(202).json({ jobId: id, status: job.status });
+    createCuts(job)
+      .catch(error => { job.status = "error"; job.message = error.message || "Falha ao gerar os cortes."; })
+      .finally(() => { activeJobs = Math.max(0, activeJobs - 1); });
+  } catch (error) {
+    activeJobs = Math.max(0, activeJobs - 1);
+    if (source) await rm(source, { recursive: true, force: true }).catch(() => {});
+    if (!res.headersSent) res.status(error.statusCode || 500).json({ error: error.message || "Não foi possível receber o vídeo." });
+  }
+});
 
 app.post("/api/cuts", async (req, res) => {
   const url = typeof req.body?.url === "string" ? req.body.url.trim() : "";
