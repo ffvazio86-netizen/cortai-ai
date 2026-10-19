@@ -12,7 +12,7 @@ Site responsivo em português para gerar três cortes verticais a partir de link
 - Limita o armazenamento padrão a 5 GiB, contabiliza arquivos temporários e cortes gerados, reserva espaço para um novo processamento e remove automaticamente cortes com mais de 24 horas.
 
 ## Limitações importantes
-Os trechos são distribuídos ao longo do vídeo; **esta versão ainda não usa IA para identificar semanticamente os melhores momentos**. O processamento real de vídeo ainda precisa ser validado com links públicos que possam ser acessados legalmente. A CI verifica os testes da API e o endpoint de saúde, mas não baixa nem processa um vídeo real.
+Os trechos são distribuídos ao longo do vídeo; **esta versão ainda não usa IA para identificar semanticamente os melhores momentos**. O processamento real de vídeo ainda precisa ser validado com links públicos que possam ser acessados legalmente. A CI testa a API e o endpoint de saúde, gera três cortes a partir de um vídeo sintético e verifica que os MP4 têm formato vertical. Ela usa um simulador para a etapa de download; ainda não confirma downloads reais do YouTube/Twitch.
 
 Links privados, restritos por idade/região, transmissões ao vivo ou vídeos que a ferramenta não consiga acessar podem falhar. O servidor precisa de CPU, memória e armazenamento suficientes.
 
