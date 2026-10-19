@@ -325,18 +325,6 @@ function registerRoutes(app, rateLimit) {
     });
   });
 
-  app.get("/api/auth/config", (_req, res) => {
-    res.set("Cache-Control", "no-store");
-    res.json({ googleClientId: "" });
-  });
-
-  app.get("/api/auth/me", authenticate, (req, res) => {
-    res.json({
-      authenticated: Boolean(req.user),
-      user: req.user ? { id: req.user.id, username: "grego", email: "grego" } : null
-    });
-  });
-
   app.post("/api/auth/logout", authenticate, (req, res) => {
     if (!checkOrigin(req, res) || authConfigError(res)) return;
     try {
