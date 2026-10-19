@@ -22,7 +22,7 @@ app.use("/cuts", express.static(OUTPUT_DIR, { fallthrough: false, index: false, 
 function validVideoUrl(raw) {
   try {
     const url = new URL(raw);
-    const host = url.hostname.toLowerCase().replace(/^www\\./, "").replace(/^m\\./, "");
+    const host = url.hostname.toLowerCase().replace(/^www\./, "").replace(/^m\./, "");
     if (url.protocol !== "https:" && url.protocol !== "http:") return false;
     if (host === "youtube.com" || host === "youtu.be" || host === "m.youtube.com" || host === "youtube-nocookie.com" || host === "twitch.tv" || host === "m.twitch.tv" || host === "clips.twitch.tv") return true;
     return false;
@@ -70,7 +70,7 @@ async function createCuts(job) {
       "-o", inputPath, job.url
     ]);
     const files = await readdir(source);
-    const videoName = files.find(name => /^source\\./.test(name) && !name.endsWith(".part"));
+    const videoName = files.find(name => /^source\./.test(name) && !name.endsWith(".part"));
     if (!videoName) throw new Error("Não foi possível localizar o vídeo baixado. Verifique se o link está público e acessível.");
     const videoPath = path.join(source, videoName);
 
