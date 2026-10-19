@@ -22,7 +22,7 @@ Use somente vídeos que você possui ou para os quais tem permissão de baixar, 
 Requisitos: Node.js 20+, FFmpeg/FFprobe e yt-dlp instalados e disponíveis no PATH.
 
 ```sh
-npm install
+npm ci
 npm test
 npm start
 ```
