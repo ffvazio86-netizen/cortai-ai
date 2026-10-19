@@ -34,7 +34,10 @@
         <p class="sub">Cole um link público ou envie um vídeo do seu computador (MP4, MOV, WebM ou MKV, até 100 MB). O YouTube pode bloquear downloads feitos por servidores.</p>
         <form id="form">
           <label class="field-label" for="url">Link do YouTube ou Twitch</label>
-          <input id="url" name="url" type="url" placeholder="https://youtube.com/watch?v=..." autocomplete="url">\n          <div style="text-align:center;color:var(--muted);font-size:12px;margin:12px 0">OU ENVIE UM ARQUIVO</div>\n          <label class="field-label" for="video">Arquivo de vídeo (até 100 MB)</label>\n          <input id="video" name="video" type="file" accept=".mp4,.mov,.webm,.mkv,video/mp4,video/quicktime,video/webm,video/x-matroska" style="width:100%;background:#101115;border:1px solid #3a3c45;border-radius:12px;padding:12px;color:white;font:inherit">
+          <input id="url" name="url" type="url" placeholder="https://youtube.com/watch?v=..." autocomplete="url">
+          <div style="text-align:center;color:var(--muted);font-size:12px;margin:12px 0">OU ENVIE UM ARQUIVO</div>
+          <label class="field-label" for="video">Arquivo de vídeo (até 100 MB)</label>
+          <input id="video" name="video" type="file" accept=".mp4,.mov,.webm,.mkv,video/mp4,video/quicktime,video/webm,video/x-matroska" style="width:100%;background:#101115;border:1px solid #3a3c45;border-radius:12px;padding:12px;color:white;font:inherit">
           <button class="submit" id="submit" type="submit">Gerar meus 3 cortes <span aria-hidden="true">→</span></button>
           <label class="consent"><input id="authorized" type="checkbox" required><span>Confirmo que tenho autorização para processar este vídeo e que seu uso respeita os direitos do criador e as regras da plataforma.</span></label>
         </form>
