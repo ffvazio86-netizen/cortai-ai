@@ -122,7 +122,6 @@ async function createCuts(job) {
       try {
         await run("yt-dlp", [
           "--no-playlist", "--no-progress", "--max-filesize", "2G",
-          "--extractor-args", "youtube:player_client=tv",
           "-f", "bv*+ba/b", "--merge-output-format", "mp4",
           "-o", inputPath, job.url
         ]);
