@@ -9,7 +9,7 @@ Site responsivo em português para gerar três cortes verticais a partir de link
 - Cria trechos de 1 a 5 minutos, conforme a duração do vídeo.
 - Mostra o andamento e oferece links para baixar os arquivos.
 - Permite apenas um processamento por vez.
-- Limita o armazenamento padrão a 5 GiB, reserva espaço para um novo processamento e remove automaticamente arquivos de cortes com mais de 24 horas.
+- Limita o armazenamento padrão a 5 GiB, contabiliza arquivos temporários e cortes gerados, reserva espaço para um novo processamento e remove automaticamente cortes com mais de 24 horas.
 
 ## Limitações importantes
 Os trechos são distribuídos ao longo do vídeo; **esta versão ainda não usa IA para identificar semanticamente os melhores momentos**. O processamento real de vídeo ainda precisa ser validado com links públicos que possam ser acessados legalmente. A CI verifica os testes da API e o endpoint de saúde, mas não baixa nem processa um vídeo real.
@@ -33,7 +33,7 @@ Abra http://localhost:3000.
 Variáveis opcionais:
 - `PORT`: porta HTTP (padrão `3000`).
 - `CORTAI_DATA_DIR`: diretório dos arquivos temporários e cortes.
-- `CORTAI_MAX_STORAGE_BYTES`: limite de armazenamento de cortes (padrão 5 GiB).
+- `CORTAI_MAX_STORAGE_BYTES`: limite total de arquivos temporários e cortes (padrão 5 GiB).
 - `CORTAI_RESERVED_JOB_BYTES`: espaço reservado para o próximo processamento (padrão 1 GiB).
 - `CORTAI_OUTPUT_RETENTION_MS`: tempo de retenção dos cortes (padrão 24 horas em milissegundos).
 
