@@ -90,7 +90,12 @@ function run(command, args, { timeoutMs = 30 * 60 * 1000 } = {}) {
     child.on("close", code => {
       clearTimeout(timer);
       if (code === 0) resolve({ stdout, stderr });
-      else reject(new Error(stderr.trim().split("\n").slice(-4).join(" ").slice(-700) || `${command} terminou com código ${code}`));
+      else {
+        const error = new Error(stderr.trim().split("\n").slice(-4).join(" ").slice(0, 700) || `${command} terminou com código ${code}`);
+        error.stderr = stderr;
+        error.stdout = stdout;
+        reject(error);
+      }
     });
   });
 }
@@ -132,6 +137,7 @@ async function createCuts(job) {
         ]);
       } catch (error) {
         const details = error.message || "";
+        if (error.stderr) console.error("[Cort-AI] Diagnóstico yt-dlp:", error.stderr.slice(-12000));
         if (/HTTP Error 429|Too Many Requests/i.test(details)) {
           throw new Error("O YouTube limitou os downloads deste servidor (HTTP 429). Aguarde antes de tentar novamente. Se continuar, baixe o vídeo que você tem autorização para usar e envie o arquivo pelo formulário; o bloqueio por IP é controlado pelo YouTube e não pode ser removido apenas pelo Cort-AI.");
         }
