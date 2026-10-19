@@ -60,7 +60,7 @@ async function enforceStorageLimit() {
       jobs.delete(dir.name);
     }
   }
-  const used = await directorySize(OUTPUT_DIR);
+  const used = await directorySize(DATA_DIR);
   if (used + RESERVED_JOB_BYTES > MAX_STORAGE_BYTES) {
     const error = new Error("O armazenamento de cortes está cheio. Os arquivos antigos são removidos automaticamente; tente novamente mais tarde.");
     error.statusCode = 507;
@@ -122,6 +122,7 @@ async function createCuts(job) {
     const files = await readdir(source);
     const videoName = files.find(name => /^source\./.test(name) && !name.endsWith(".part"));
     if (!videoName) throw new Error("Não foi possível localizar o vídeo baixado. Verifique se o link está público e acessível.");
+    await enforceStorageLimit();
     const videoPath = path.join(source, videoName);
 
     job.message = "Analisando duração do vídeo…";
@@ -148,6 +149,7 @@ async function createCuts(job) {
         "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", target
       ]);
       cuts.push({ name: fileName, url: `/cuts/${job.id}/${fileName}`, durationSeconds: clipLength, startSeconds: starts[i] });
+      await enforceStorageLimit();
       job.progress = Math.round(((i + 1) / 3) * 100);
     }
     job.cuts = cuts;
