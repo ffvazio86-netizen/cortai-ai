@@ -124,6 +124,9 @@ async function createCuts(job) {
           "--no-playlist", "--no-progress", "--max-filesize", "2G",
           "--force-ipv4", "--retries", "3", "--fragment-retries", "3",
           "--extractor-retries", "3", "--retry-sleep", "http:2",
+          "--remote-components", "ejs:github",
+          "--extractor-args", "youtube:player_client=mweb",
+          "--extractor-args", "youtubepot-bgutilscript:server_home=/opt/bgutil-ytdlp-pot-provider/server",
           "-f", "bv*+ba/b", "--merge-output-format", "mp4",
           "-o", inputPath, job.url
         ]);
