@@ -2,7 +2,7 @@ import express from "express";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { randomUUID } from "node:crypto";
-import { mkdir, readdir, rm } from "node:fs/promises";
+import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import { spawn } from "node:child_process";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -13,6 +13,10 @@ const OUTPUT_DIR = path.join(DATA_DIR, "cuts");
 const TEMP_DIR = path.join(DATA_DIR, "temp");
 const jobs = new Map();
 const MAX_ACTIVE_JOBS = 1;
+const MAX_STORAGE_BYTES = Number(process.env.CORTAI_MAX_STORAGE_BYTES || 5 * 1024 * 1024 * 1024);
+const RESERVED_JOB_BYTES = Number(process.env.CORTAI_RESERVED_JOB_BYTES || 1024 * 1024 * 1024);
+const OUTPUT_RETENTION_MS = Number(process.env.CORTAI_OUTPUT_RETENTION_MS || 24 * 60 * 60 * 1000);
+const MAX_RETAINED_JOBS = 500;
 let activeJobs = 0;
 
 app.use(express.json({ limit: "20kb" }));
@@ -29,6 +33,51 @@ function validVideoUrl(raw) {
   } catch { return false; }
 }
 
+async function directorySize(dir) {
+  let total = 0;
+  let entries = [];
+  try { entries = await readdir(dir, { withFileTypes: true }); } catch (error) {
+    if (error.code === "ENOENT") return 0;
+    throw error;
+  }
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) total += await directorySize(fullPath);
+    else if (entry.isFile()) total += (await stat(fullPath)).size;
+  }
+  return total;
+}
+
+async function enforceStorageLimit() {
+  const now = Date.now();
+  const dirs = await readdir(OUTPUT_DIR, { withFileTypes: true }).catch(() => []);
+  for (const dir of dirs) {
+    if (!dir.isDirectory()) continue;
+    const fullPath = path.join(OUTPUT_DIR, dir.name);
+    const details = await stat(fullPath).catch(() => null);
+    if (details && now - details.mtimeMs > OUTPUT_RETENTION_MS) {
+      await rm(fullPath, { recursive: true, force: true });
+      jobs.delete(dir.name);
+    }
+  }
+  const used = await directorySize(OUTPUT_DIR);
+  if (used + RESERVED_JOB_BYTES > MAX_STORAGE_BYTES) {
+    const error = new Error("O armazenamento de cortes está cheio. Os arquivos antigos são removidos automaticamente; tente novamente mais tarde.");
+    error.statusCode = 507;
+    throw error;
+  }
+}
+
+function pruneJobHistory() {
+  while (jobs.size > MAX_RETAINED_JOBS) {
+    const oldest = jobs.keys().next().value;
+    if (!oldest) break;
+    const item = jobs.get(oldest);
+    if (item && (item.status === "queued" || item.status === "processing")) break;
+    jobs.delete(oldest);
+  }
+}
+
 function run(command, args, { timeoutMs = 30 * 60 * 1000 } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] });
@@ -41,7 +90,7 @@ function run(command, args, { timeoutMs = 30 * 60 * 1000 } = {}) {
     child.on("close", code => {
       clearTimeout(timer);
       if (code === 0) resolve({ stdout, stderr });
-      else reject(new Error(stderr.trim().split("\\n").slice(-4).join(" ").slice(-700) || `${command} terminou com código ${code}`));
+      else reject(new Error(stderr.trim().split("\n").slice(-4).join(" ").slice(-700) || `${command} terminou com código ${code}`));
     });
   });
 }
@@ -56,6 +105,7 @@ async function createCuts(job) {
   const output = path.join(OUTPUT_DIR, job.id);
   await mkdir(output, { recursive: true });
   try {
+    await enforceStorageLimit();
     job.status = "processing";
     job.message = "Verificando ferramentas de vídeo…";
     await findBinary("yt-dlp");
@@ -103,6 +153,9 @@ async function createCuts(job) {
     job.cuts = cuts;
     job.status = "done";
     job.message = "Seus 3 cortes estão prontos.";
+  } catch (error) {
+    await rm(output, { recursive: true, force: true }).catch(() => {});
+    throw error;
   } finally {
     await rm(source, { recursive: true, force: true }).catch(() => {});
   }
@@ -115,8 +168,14 @@ app.post("/api/cuts", async (req, res) => {
   if (!validVideoUrl(url)) return res.status(400).json({ error: "Cole um link válido do YouTube ou da Twitch." });
   if (req.body?.authorized !== true) return res.status(400).json({ error: "Confirme que você tem autorização para processar este vídeo." });
   if (activeJobs >= MAX_ACTIVE_JOBS) return res.status(429).json({ error: "Já existe um vídeo sendo processado. Tente novamente em alguns minutos." });
+  try {
+    await enforceStorageLimit();
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ error: error.message || "Não foi possível verificar o armazenamento." });
+  }
   const job = { id: randomUUID(), url, status: "queued", progress: 0, message: "Preparando processamento…", cuts: [] };
   jobs.set(job.id, job);
+  pruneJobHistory();
   activeJobs++;
   res.status(202).json({ jobId: job.id, status: job.status });
   createCuts(job)
