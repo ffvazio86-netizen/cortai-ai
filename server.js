@@ -136,7 +136,7 @@ async function createCuts(job) {
           throw new Error("O YouTube limitou os downloads deste servidor (HTTP 429). Aguarde antes de tentar novamente. Se continuar, baixe o vídeo que você tem autorização para usar e envie o arquivo pelo formulário; o bloqueio por IP é controlado pelo YouTube e não pode ser removido apenas pelo Cort-AI.");
         }
         if (/HTTP Error 403|Forbidden|Unable to download API page|Sign in to confirm/i.test(details)) {
-          throw new Error("O YouTube recusou o download (HTTP 403). Isso pode ocorrer por validação de segurança, formato indisponível ou restrição do servidor. O Cort-AI tentou novamente usando IPv4; se o erro persistir, envie um arquivo de vídeo que você tenha autorização para processar.");
+          throw new Error("O YouTube recusou o download (HTTP 403). Isso pode ocorrer por validação de segurança, formato indisponível ou restrição do servidor. O Cort-AI tentou usar IPv4 e o provedor de token PO Token; isso não garante que o YouTube permita o download. Se o erro persistir, envie um arquivo de vídeo que você tenha autorização para processar.");
         }
         throw error;
       }
