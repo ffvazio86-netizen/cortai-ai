@@ -122,13 +122,18 @@ async function createCuts(job) {
       try {
         await run("yt-dlp", [
           "--no-playlist", "--no-progress", "--max-filesize", "2G",
+          "--force-ipv4", "--retries", "3", "--fragment-retries", "3",
+          "--extractor-retries", "3", "--retry-sleep", "http:2",
           "-f", "bv*+ba/b", "--merge-output-format", "mp4",
           "-o", inputPath, job.url
         ]);
       } catch (error) {
         const details = error.message || "";
-        if (/HTTP Error 429|HTTP Error 403|Unable to download API page/i.test(details)) {
-          throw new Error("O YouTube bloqueou o download a partir do servidor (HTTP 403/429). Tente enviar o arquivo de vídeo diretamente pelo formulário; atualizar o yt-dlp ou tentar outro método não garante remover o bloqueio do IP.");
+        if (/HTTP Error 429|Too Many Requests/i.test(details)) {
+          throw new Error("O YouTube limitou os downloads deste servidor (HTTP 429). Aguarde antes de tentar novamente. Se continuar, baixe o vídeo que você tem autorização para usar e envie o arquivo pelo formulário; o bloqueio por IP é controlado pelo YouTube e não pode ser removido apenas pelo Cort-AI.");
+        }
+        if (/HTTP Error 403|Forbidden|Unable to download API page|Sign in to confirm/i.test(details)) {
+          throw new Error("O YouTube recusou o download (HTTP 403). Isso pode ocorrer por validação de segurança, formato indisponível ou restrição do servidor. O Cort-AI tentou novamente usando IPv4; se o erro persistir, envie um arquivo de vídeo que você tenha autorização para processar.");
         }
         throw error;
       }
