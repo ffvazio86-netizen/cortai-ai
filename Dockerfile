@@ -26,4 +26,4 @@ ENV CORTAI_DATA_DIR=/data
 RUN mkdir -p /data/cuts /data/temp && chown -R node:node /app /data
 USER node
 EXPOSE 3000
-CMD ["npm", "start"]
+CMD ["sh", "-c", "node /opt/bgutil-ytdlp-pot-provider/server/build/main.js --host 127.0.0.1 --port 4416 & exec npm start"]
