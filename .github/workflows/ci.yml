@@ -9,6 +9,9 @@ on:
       - codex/cortai-rebuild-mvp
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -20,9 +23,29 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
 
-      - name: Instalar dependências
-        run: npm install
+      - name: Gerar lockfile reproduzível
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+
+      - name: Salvar package-lock.json na branch de trabalho
+        if: github.event_name == 'push' && github.ref == 'refs/heads/codex/cortai-rebuild-mvp'
+        run: |
+          if git diff --quiet -- package-lock.json && git ls-files --error-unmatch package-lock.json >/dev/null 2>&1; then
+            echo "package-lock.json já está atualizado."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Add reproducible npm lockfile"
+            git push origin HEAD:codex/cortai-rebuild-mvp
+          fi
+
+      - name: Instalar dependências pelo lockfile
+        run: npm ci
 
       - name: Executar testes
         run: npm test
