@@ -1,0 +1,17 @@
+{
+  "name": "cortai-simple-mvp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cort-AI minimal responsive MVP scaffold",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}
