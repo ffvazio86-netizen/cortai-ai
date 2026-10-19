@@ -1,25 +1,60 @@
-import test from "node:test";
+import test, { before, after } from "node:test";
 import assert from "node:assert/strict";
+import { createServer } from "node:http";
+import { app, validVideoUrl } from "../server.js";
 
-function validVideoUrl(raw) {
-  try {
-    const url = new URL(raw);
-    const host = url.hostname.toLowerCase().replace(/^www\./, "").replace(/^m\./, "");
-    return (url.protocol === "https:" || url.protocol === "http:") &&
-      ["youtube.com", "youtu.be", "m.youtube.com", "youtube-nocookie.com", "twitch.tv", "m.twitch.tv", "clips.twitch.tv"].includes(host);
-  } catch { return false; }
-}
+let server;
+let baseUrl;
 
-test("accepts YouTube and Twitch links", () => {
+before(async () => {
+  server = createServer(app);
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  baseUrl = `http://127.0.0.1:${server.address().port}`;
+});
+
+after(async () => {
+  if (server) await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+});
+
+test("aceita links do YouTube e da Twitch", () => {
   assert.equal(validVideoUrl("https://youtu.be/abc123"), true);
   assert.equal(validVideoUrl("https://www.youtube.com/watch?v=abc123"), true);
   assert.equal(validVideoUrl("https://www.twitch.tv/videos/123456"), true);
   assert.equal(validVideoUrl("https://clips.twitch.tv/SomeClip"), true);
 });
 
-test("rejects other hosts and malformed URLs", () => {
+test("rejeita hosts externos e URLs malformadas", () => {
   assert.equal(validVideoUrl("https://example.com/video"), false);
   assert.equal(validVideoUrl("not a url"), false);
   assert.equal(validVideoUrl("javascript:alert(1)"), false);
   assert.equal(validVideoUrl("https://youtube.com.example.org/watch?v=x"), false);
+});
+
+test("endpoint de saúde responde com o serviço Cort-AI", async () => {
+  const response = await fetch(`${baseUrl}/api/health`);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { ok: true, service: "Cort-AI", version: "1.0.0" });
+});
+
+test("API rejeita link externo sem iniciar processamento", async () => {
+  const response = await fetch(`${baseUrl}/api/cuts`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ url: "https://example.com/video", authorized: true })
+  });
+  assert.equal(response.status, 400);
+  assert.match((await response.json()).error, /YouTube ou da Twitch/);
+});
+
+test("API exige confirmação de autorização", async () => {
+  const response = await fetch(`${baseUrl}/api/cuts`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ url: "https://youtu.be/abc123", authorized: false })
+  });
+  assert.equal(response.status, 400);
+  assert.match((await response.json()).error, /autorização/);
 });
