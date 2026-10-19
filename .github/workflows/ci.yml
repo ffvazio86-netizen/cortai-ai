@@ -1,0 +1,47 @@
+name: Cort-AI CI
+
+on:
+  push:
+    branches:
+      - codex/cortai-rebuild-mvp
+  pull_request:
+    branches:
+      - codex/cortai-rebuild-mvp
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Instalar dependências
+        run: npm install
+
+      - name: Executar testes
+        run: npm test
+
+      - name: Verificar inicialização e endpoint de saúde
+        run: |
+          npm start > /tmp/cortai-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+
+          for attempt in $(seq 1 20); do
+            if curl --fail --silent http://127.0.0.1:3000/api/health > /tmp/cortai-health.json; then
+              cat /tmp/cortai-health.json
+              grep -q '"ok":true' /tmp/cortai-health.json
+              exit 0
+            fi
+            sleep 1
+          done
+
+          cat /tmp/cortai-server.log
+          echo "O servidor não respondeu ao endpoint /api/health."
+          exit 1
