@@ -214,13 +214,13 @@ function safeEqual(a, b) {
 }
 
 function clearCookie(res, name) {
-  res.setHeader("Set-Cookie", name + "=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0");
+  res.append("Set-Cookie", name + "=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0");
 }
 
 function setSession(res, user) {
   const payload = Buffer.from(JSON.stringify({ ...user, exp: Date.now() + 7 * 24 * 60 * 60 * 1000 })).toString("base64url");
   const value = payload + "." + sign(payload);
-  res.setHeader("Set-Cookie", "cortai_session=" + encodeURIComponent(value) + "; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=604800");
+  res.append("Set-Cookie", "cortai_session=" + encodeURIComponent(value) + "; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=604800");
 }
 
 function readSession(req) {
