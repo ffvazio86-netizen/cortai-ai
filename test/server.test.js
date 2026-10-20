@@ -30,7 +30,7 @@ function sessionCookie(sub = "test-user") {
     sub,
     email: "test@example.com",
     name: "Cort-AI test",
-    exp: Date.now() + 60_000
+    exp: Date.now() + 15 * 60_000
   })).toString("base64url");
   const signature = createHmac("sha256", process.env.SESSION_SECRET).update(payload).digest("base64url");
   return `cortai_session=${encodeURIComponent(payload + "." + signature)}`;
