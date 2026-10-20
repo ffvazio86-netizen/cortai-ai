@@ -45,7 +45,7 @@ test("endpoint de saúde responde com o serviço Cort-AI", async () => {
   assert.deepEqual(await response.json(), { ok: true, service: "Cort-AI", version: "1.0.0" });
 });
 
-test("API rejeita link externo sem iniciar processamento", async () => {
+test("API de cortes exige login antes de validar o link", async () => {
   const response = await fetch(`${baseUrl}/api/cuts`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -55,7 +55,7 @@ test("API rejeita link externo sem iniciar processamento", async () => {
   assert.match((await response.json()).error, /login/);
 });
 
-test("API exige confirmação de autorização", async () => {
+test("API de cortes exige login antes de processar", async () => {
   const response = await fetch(`${baseUrl}/api/cuts`, {
     method: "POST",
     headers: { "content-type": "application/json" },
