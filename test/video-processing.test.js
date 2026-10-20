@@ -1,6 +1,7 @@
 import test, { before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
+import { createHmac } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -66,7 +67,8 @@ fs.copyFileSync(process.env.CORTAI_FIXTURE_VIDEO, output);
         CORTAI_DATA_DIR: dataDir,
         CORTAI_FIXTURE_VIDEO: fixture,
         CORTAI_MAX_STORAGE_BYTES: String(5 * 1024 * 1024 * 1024),
-        CORTAI_RESERVED_JOB_BYTES: "0"
+        CORTAI_RESERVED_JOB_BYTES: "0",
+        SESSION_SECRET: "test-session-secret"
       },
       stdio: ["ignore", "pipe", "pipe"]
     });
@@ -74,6 +76,9 @@ fs.copyFileSync(process.env.CORTAI_FIXTURE_VIDEO, output);
     serverProcess.stdout.on("data", chunk => { logs += chunk.toString(); });
     serverProcess.stderr.on("data", chunk => { logs += chunk.toString(); });
     baseUrl = `http://127.0.0.1:${port}`;
+    const sessionPayload = Buffer.from(JSON.stringify({ sub: "test-user", email: "test@example.com", name: "Test", picture: "", exp: Date.now() + 60 * 60 * 1000 })).toString("base64url");
+    const sessionSignature = createHmac("sha256", "test-session-secret").update(sessionPayload).digest("base64url");
+    const sessionCookie = "cortai_session=" + encodeURIComponent(sessionPayload + "." + sessionSignature);
 
     let healthy = false;
     for (let attempt = 0; attempt < 40; attempt++) {
@@ -88,7 +93,7 @@ fs.copyFileSync(process.env.CORTAI_FIXTURE_VIDEO, output);
 
     const startResponse = await fetch(`${baseUrl}/api/cuts`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", cookie: sessionCookie },
       body: JSON.stringify({ url: "https://youtu.be/test-fixture", authorized: true })
     });
     const startBody = await startResponse.text();
@@ -97,7 +102,7 @@ fs.copyFileSync(process.env.CORTAI_FIXTURE_VIDEO, output);
     let job;
     for (let attempt = 0; attempt < 240; attempt++) {
       await new Promise(resolve => setTimeout(resolve, 500));
-      const response = await fetch(`${baseUrl}/api/jobs/${jobId}`);
+      const response = await fetch(`${baseUrl}/api/jobs/${jobId}`, { headers: { cookie: sessionCookie } });
       job = await response.json();
       if (job.status === "done" || job.status === "error") break;
     }
@@ -106,7 +111,7 @@ fs.copyFileSync(process.env.CORTAI_FIXTURE_VIDEO, output);
     assert.equal(job.cuts.length, 3);
     for (const cut of job.cuts) {
       assert.equal(cut.durationSeconds, 60);
-      const download = await fetch(new URL(cut.url, baseUrl));
+      const download = await fetch(new URL(cut.url, baseUrl), { headers: { cookie: sessionCookie } });
       assert.equal(download.status, 200, `Falha ao baixar ${cut.name}`);
       assert.match(download.headers.get("content-type") || "", /video\/mp4/);
       const bytes = Buffer.from(await download.arrayBuffer());
@@ -124,7 +129,7 @@ fs.copyFileSync(process.env.CORTAI_FIXTURE_VIDEO, output);
     // blocks downloads from cloud-server IP addresses).
     const uploadResponse = await fetch(`${baseUrl}/api/upload?authorized=true&filename=fixture.mp4`, {
       method: "POST",
-      headers: { "content-type": "application/octet-stream" },
+      headers: { "content-type": "application/octet-stream", cookie: sessionCookie },
       body: await readFile(fixture)
     });
     const uploadBody = await uploadResponse.text();
@@ -133,7 +138,7 @@ fs.copyFileSync(process.env.CORTAI_FIXTURE_VIDEO, output);
     let uploadedJob;
     for (let attempt = 0; attempt < 240; attempt++) {
       await new Promise(resolve => setTimeout(resolve, 500));
-      const response = await fetch(`${baseUrl}/api/jobs/${uploadedJobId}`);
+      const response = await fetch(`${baseUrl}/api/jobs/${uploadedJobId}`, { headers: { cookie: sessionCookie } });
       uploadedJob = await response.json();
       if (uploadedJob.status === "done" || uploadedJob.status === "error") break;
     }
