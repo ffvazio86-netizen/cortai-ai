@@ -51,8 +51,8 @@ test("API rejeita link externo sem iniciar processamento", async () => {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ url: "https://example.com/video", authorized: true })
   });
-  assert.equal(response.status, 400);
-  assert.match((await response.json()).error, /YouTube ou da Twitch/);
+  assert.equal(response.status, 401);
+  assert.match((await response.json()).error, /login/);
 });
 
 test("API exige confirmação de autorização", async () => {
@@ -61,6 +61,28 @@ test("API exige confirmação de autorização", async () => {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ url: "https://youtu.be/abc123", authorized: false })
   });
-  assert.equal(response.status, 400);
-  assert.match((await response.json()).error, /autorização/);
+  assert.equal(response.status, 401);
+  assert.match((await response.json()).error, /login/);
+});
+
+test("consulta de tarefas exige login", async () => {
+  const response = await fetch(`${baseUrl}/api/jobs/id-qualquer`);
+  assert.equal(response.status, 401);
+  assert.match((await response.json()).error, /login/);
+});
+
+test("arquivos de cortes exigem login", async () => {
+  const response = await fetch(`${baseUrl}/cuts/id-qualquer/corte-1.mp4`);
+  assert.equal(response.status, 401);
+  assert.match((await response.json()).error, /login/);
+});
+
+test("upload exige login antes de aceitar dados", async () => {
+  const response = await fetch(`${baseUrl}/api/upload?authorized=true&filename=video.mp4`, {
+    method: "POST",
+    headers: { "content-type": "application/octet-stream" },
+    body: Buffer.from("video")
+  });
+  assert.equal(response.status, 401);
+  assert.match((await response.json()).error, /login/);
 });
