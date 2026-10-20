@@ -1,13 +1,13 @@
 FROM node:22-bookworm-slim
 
-# Tools for video processing and the officially documented yt-dlp PO Token
-# provider. The provider runs as a local-only HTTP service on loopback; it is
-# not exposed publicly and does not need an additional Render port.
+# FFmpeg renders the vertical MP4 cuts. yt-dlp nightly is used because YouTube
+# frequently changes its player and fixes can land before the next stable release.
+# The PO Token provider runs on loopback only; it is not exposed publicly.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
     ffmpeg ca-certificates curl git python3 python3-pip build-essential \
     pkg-config libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev \
-  && python3 -m pip install --break-system-packages --no-cache-dir yt-dlp bgutil-ytdlp-pot-provider==2.0.2 \
+  && python3 -m pip install --break-system-packages --no-cache-dir --pre "yt-dlp[default]" bgutil-ytdlp-pot-provider==2.0.2 \
   && git clone --depth 1 --branch 2.0.2 https://github.com/Brainicism/bgutil-ytdlp-pot-provider.git /opt/bgutil-ytdlp-pot-provider \
   && cd /opt/bgutil-ytdlp-pot-provider/server \
   && npm ci \

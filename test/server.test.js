@@ -1,12 +1,18 @@
 import test, { before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
+import { execFileSync } from "node:child_process";
+import { createHmac } from "node:crypto";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { app, validVideoUrl } from "../server.js";
 
 let server;
 let baseUrl;
 
 before(async () => {
+  process.env.SESSION_SECRET ||= "cortai-test-session-secret-with-more-than-32-bytes";
   server = createServer(app);
   await new Promise((resolve, reject) => {
     server.once("error", reject);
@@ -18,6 +24,17 @@ before(async () => {
 after(async () => {
   if (server) await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
 });
+
+function sessionCookie(sub = "test-user") {
+  const payload = Buffer.from(JSON.stringify({
+    sub,
+    email: "test@example.com",
+    name: "Cort-AI test",
+    exp: Date.now() + 15 * 60_000
+  })).toString("base64url");
+  const signature = createHmac("sha256", process.env.SESSION_SECRET).update(payload).digest("base64url");
+  return `cortai_session=${encodeURIComponent(payload + "." + signature)}`;
+}
 
 test("aceita links do YouTube e da Twitch", () => {
   assert.equal(validVideoUrl("https://youtu.be/abc123"), true);
@@ -85,4 +102,59 @@ test("upload exige login antes de aceitar dados", async () => {
   });
   assert.equal(response.status, 401);
   assert.match((await response.json()).error, /login/);
+});
+
+test("gera três arquivos MP4 reais a partir de um vídeo enviado", { timeout: 240_000 }, async () => {
+  const temp = await mkdtemp(path.join(os.tmpdir(), "cortai-e2e-"));
+  try {
+    const input = path.join(temp, "sample.mp4");
+    execFileSync("ffmpeg", [
+      "-hide_banner", "-loglevel", "error", "-y",
+      "-f", "lavfi", "-i", "color=c=blue:s=160x90:r=1",
+      "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100",
+      "-t", "181", "-c:v", "libx264", "-preset", "ultrafast",
+      "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", input
+    ], { stdio: "ignore" });
+    const bytes = await readFile(input);
+    const cookie = sessionCookie();
+
+    const upload = await fetch(`${baseUrl}/api/upload?authorized=true&filename=sample.mp4`, {
+      method: "POST",
+      headers: { "content-type": "application/octet-stream", cookie },
+      body: bytes
+    });
+    const uploadData = await upload.json();
+    assert.equal(upload.status, 202, JSON.stringify(uploadData));
+    const { jobId } = uploadData;
+    assert.ok(jobId);
+
+    let status;
+    const deadline = Date.now() + 210_000;
+    while (Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      const response = await fetch(`${baseUrl}/api/jobs/${jobId}`, { headers: { cookie } });
+      assert.equal(response.status, 200);
+      status = await response.json();
+      if (status.status === "done" || status.status === "error") break;
+    }
+    assert.equal(status?.status, "done", status?.message || "O processamento não terminou no prazo.");
+    assert.equal(status.cuts.length, 3);
+
+    for (const cut of status.cuts) {
+      const response = await fetch(new URL(cut.url, baseUrl), { headers: { cookie } });
+      assert.equal(response.status, 200, `Falha ao baixar ${cut.name}`);
+      assert.match(response.headers.get("content-type") || "", /video\/mp4/);
+      const output = Buffer.from(await response.arrayBuffer());
+      assert.ok(output.length > 10_000, `${cut.name} parece vazio`);
+      const outputPath = path.join(temp, cut.name);
+      await writeFile(outputPath, output);
+      const duration = Number(execFileSync("ffprobe", [
+        "-v", "error", "-show_entries", "format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1", outputPath
+      ], { encoding: "utf8" }).trim());
+      assert.ok(duration >= 59 && duration <= 61, `${cut.name} tem duração inesperada: ${duration}`);
+    }
+  } finally {
+    await rm(temp, { recursive: true, force: true });
+  }
 });
