@@ -1,0 +1,13 @@
+{
+  "name": "cortai",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cort-AI: geração de cortes verticais a partir de links autorizados do YouTube e Twitch",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": { "express": "^5.1.0" }
+}

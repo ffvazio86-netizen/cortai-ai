@@ -1,0 +1,83 @@
+name: Cort-AI CI
+
+concurrency:
+  group: cortai-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches:
+      - codex/cortai-rebuild-mvp
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Instalar FFmpeg para teste de geração de cortes
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+
+      - name: Instalar dependências pelo lockfile
+        run: npm ci
+
+      - name: Executar testes
+        run: npm test
+
+      - name: Verificar inicialização e endpoint de saúde
+        run: |
+          npm start > /tmp/cortai-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+
+          for attempt in $(seq 1 20); do
+            if curl --fail --silent http://127.0.0.1:3000/api/health > /tmp/cortai-health.json; then
+              cat /tmp/cortai-health.json
+              grep -q '"ok":true' /tmp/cortai-health.json
+              exit 0
+            fi
+            sleep 1
+          done
+
+          cat /tmp/cortai-server.log
+          echo "O servidor não respondeu ao endpoint /api/health."
+          exit 1
+
+      - name: Validar build da imagem Docker
+        run: docker build --tag cortai:test .
+
+      - name: Validar inicialização do contêiner Docker
+        run: |
+          docker run --detach --name cortai-smoke -p 127.0.0.1:3100:3000 -e CORTAI_DATA_DIR=/data -e CORTAI_MAX_STORAGE_BYTES=5368709120 -e CORTAI_RESERVED_JOB_BYTES=0 cortai:test
+          trap 'docker rm --force cortai-smoke >/dev/null 2>&1 || true' EXIT
+          docker exec cortai-smoke yt-dlp --version
+          docker exec cortai-smoke ffmpeg -version
+          docker exec cortai-smoke ffprobe -version
+
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:3100/api/health > /tmp/cortai-docker-health.json; then
+              cat /tmp/cortai-docker-health.json
+              grep -q '"ok":true' /tmp/cortai-docker-health.json
+              exit 0
+            fi
+            sleep 1
+          done
+
+          docker logs cortai-smoke
+          echo "O contêiner Docker não respondeu ao endpoint /api/health."
+          exit 1
