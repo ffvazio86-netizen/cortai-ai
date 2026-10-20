@@ -33,6 +33,12 @@ test("rejeita hosts externos e URLs malformadas", () => {
   assert.equal(validVideoUrl("https://youtube.com.example.org/watch?v=x"), false);
 });
 
+test("endpoint de sessão informa quando não há login", async () => {
+  const response = await fetch(`${baseUrl}/api/me`);
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { authenticated: false });
+});
+
 test("endpoint de saúde responde com o serviço Cort-AI", async () => {
   const response = await fetch(`${baseUrl}/api/health`);
   assert.equal(response.status, 200);
