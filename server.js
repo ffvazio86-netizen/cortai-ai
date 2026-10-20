@@ -1,7 +1,7 @@
 import express from "express";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomBytes, createHmac, timingSafeEqual } from "node:crypto";
 import { mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 
@@ -191,6 +191,120 @@ async function createCuts(job) {
     await rm(source, { recursive: true, force: true }).catch(() => {});
   }
 }
+
+
+function cookieValue(req, name) {
+  const header = req.headers.cookie || "";
+  for (const part of header.split(";")) {
+    const index = part.indexOf("=");
+    if (index >= 0 && part.slice(0, index).trim() === name) return decodeURIComponent(part.slice(index + 1).trim());
+  }
+  return null;
+}
+
+function sign(value) {
+  return createHmac("sha256", process.env.SESSION_SECRET || "").update(value).digest("base64url");
+}
+
+function safeEqual(a, b) {
+  if (typeof a !== "string" || typeof b !== "string") return false;
+  const left = Buffer.from(a);
+  const right = Buffer.from(b);
+  return left.length === right.length && timingSafeEqual(left, right);
+}
+
+function clearCookie(res, name) {
+  res.setHeader("Set-Cookie", name + "=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0");
+}
+
+function setSession(res, user) {
+  const payload = Buffer.from(JSON.stringify({ ...user, exp: Date.now() + 7 * 24 * 60 * 60 * 1000 })).toString("base64url");
+  const value = payload + "." + sign(payload);
+  res.setHeader("Set-Cookie", "cortai_session=" + encodeURIComponent(value) + "; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=604800");
+}
+
+function readSession(req) {
+  const value = cookieValue(req, "cortai_session");
+  if (!value || !process.env.SESSION_SECRET) return null;
+  const separator = value.lastIndexOf(".");
+  if (separator < 1) return null;
+  const payload = value.slice(0, separator);
+  if (!safeEqual(value.slice(separator + 1), sign(payload))) return null;
+  try {
+    const user = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    if (!user.sub || !user.exp || user.exp < Date.now()) return null;
+    return { sub: user.sub, email: user.email, name: user.name, picture: user.picture };
+  } catch { return null; }
+}
+
+app.get("/auth/google", (req, res) => {
+  const { GOOGLE_CLIENT_ID, GOOGLE_REDIRECT_URI, SESSION_SECRET } = process.env;
+  if (!GOOGLE_CLIENT_ID || !GOOGLE_REDIRECT_URI || !SESSION_SECRET) {
+    return res.status(503).send("O login Google ainda não foi configurado no servidor.");
+  }
+  const state = randomBytes(32).toString("base64url");
+  res.setHeader("Set-Cookie", "cortai_oauth_state=" + state + "; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600");
+  const params = new URLSearchParams({
+    client_id: GOOGLE_CLIENT_ID,
+    redirect_uri: GOOGLE_REDIRECT_URI,
+    response_type: "code",
+    scope: "openid email profile",
+    state,
+    prompt: "select_account"
+  });
+  res.redirect("https://accounts.google.com/o/oauth2/v2/auth?" + params.toString());
+});
+
+app.get("/auth/google/callback", async (req, res) => {
+  const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI, SESSION_SECRET } = process.env;
+  const stateCookie = cookieValue(req, "cortai_oauth_state");
+  clearCookie(res, "cortai_oauth_state");
+  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !GOOGLE_REDIRECT_URI || !SESSION_SECRET) {
+    return res.status(503).send("O login Google ainda não foi configurado no servidor.");
+  }
+  if (req.query.error) return res.redirect("/?login=cancelled");
+  if (typeof req.query.code !== "string" || !safeEqual(req.query.state, stateCookie)) {
+    return res.status(400).send("Não foi possível validar o retorno do login Google. Tente novamente.");
+  }
+  try {
+    const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        code: req.query.code,
+        client_id: GOOGLE_CLIENT_ID,
+        client_secret: GOOGLE_CLIENT_SECRET,
+        redirect_uri: GOOGLE_REDIRECT_URI,
+        grant_type: "authorization_code"
+      })
+    });
+    const tokens = await tokenResponse.json();
+    if (!tokenResponse.ok || !tokens.access_token) throw new Error("Falha ao trocar o código OAuth.");
+    const profileResponse = await fetch("https://openidconnect.googleapis.com/v1/userinfo", {
+      headers: { authorization: "Bearer " + tokens.access_token }
+    });
+    const profile = await profileResponse.json();
+    if (!profileResponse.ok || !profile.sub || !profile.email || profile.email_verified !== true) {
+      throw new Error("O Google não retornou um perfil verificado.");
+    }
+    setSession(res, { sub: profile.sub, email: profile.email, name: profile.name || "", picture: profile.picture || "" });
+    res.redirect("/?login=success");
+  } catch (error) {
+    console.error("[Cort-AI] Falha no login Google:", error.message);
+    res.redirect("/?login=error");
+  }
+});
+
+app.get("/api/me", (req, res) => {
+  const user = readSession(req);
+  if (!user) return res.status(401).json({ authenticated: false });
+  res.json({ authenticated: true, user });
+});
+
+app.post("/auth/logout", (_req, res) => {
+  clearCookie(res, "cortai_session");
+  res.redirect("/");
+});
 
 app.get("/api/health", (_req, res) => res.json({ ok: true, service: "Cort-AI", version: "1.0.0" }));
 
