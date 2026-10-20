@@ -10,7 +10,7 @@ on:
       - codex/cortai-rebuild-mvp
   pull_request:
     branches:
-      - codex/cortai-rebuild-mvp
+      - main
   workflow_dispatch:
 
 permissions:
