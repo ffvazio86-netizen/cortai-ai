@@ -384,7 +384,7 @@ app.get("/cuts/:jobId/:filename", requireAuth, (req, res) => {
     return res.status(404).json({ error: "Corte não encontrado." });
   }
   const allowed = (job.cuts || []).some(cut => cut.name === req.params.filename);
-  if (!allowed || !/^corte-[1-3]\\.mp4$/.test(req.params.filename)) {
+  if (!allowed || !/^corte-[1-3]\.mp4$/.test(req.params.filename)) {
     return res.status(404).json({ error: "Corte não encontrado." });
   }
   res.setHeader("Cache-Control", "private, no-store");
