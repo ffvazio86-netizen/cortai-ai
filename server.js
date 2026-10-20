@@ -21,7 +21,6 @@ let activeJobs = 0;
 
 app.use(express.json({ limit: "20kb" }));
 app.use(express.static(path.join(__dirname, "public")));
-app.use("/cuts", express.static(OUTPUT_DIR, { fallthrough: false, index: false, maxAge: "1h" }));
 
 function validVideoUrl(raw) {
   try {
@@ -237,6 +236,13 @@ function readSession(req) {
   } catch { return null; }
 }
 
+function requireAuth(req, res, next) {
+  const user = readSession(req);
+  if (!user) return res.status(401).json({ error: "Faça login para continuar." });
+  req.user = user;
+  next();
+}
+
 app.get("/auth/google", (req, res) => {
   const { GOOGLE_CLIENT_ID, GOOGLE_REDIRECT_URI, SESSION_SECRET } = process.env;
   if (!GOOGLE_CLIENT_ID || !GOOGLE_REDIRECT_URI || !SESSION_SECRET) {
@@ -308,7 +314,7 @@ app.post("/auth/logout", (_req, res) => {
 
 app.get("/api/health", (_req, res) => res.json({ ok: true, service: "Cort-AI", version: "1.0.0" }));
 
-app.post("/api/upload", express.raw({ type: "application/octet-stream", limit: "100mb" }), async (req, res) => {
+app.post("/api/upload", requireAuth, express.raw({ type: "application/octet-stream", limit: "100mb" }), async (req, res) => {
   const authorized = req.query?.authorized === "true";
   const filename = typeof req.query?.filename === "string" ? path.basename(req.query.filename) : "";
   const extension = path.extname(filename).toLowerCase();
@@ -329,7 +335,7 @@ app.post("/api/upload", express.raw({ type: "application/octet-stream", limit: "
     await mkdir(source, { recursive: true });
     const uploadedPath = path.join(source, `uploaded${extension}`);
     await writeFile(uploadedPath, req.body, { flag: "wx" });
-    const job = { id, uploadedPath, status: "queued", progress: 0, message: "Preparando o vídeo enviado…", cuts: [] };
+    const job = { id, ownerSub: req.user.sub, uploadedPath, status: "queued", progress: 0, message: "Preparando o vídeo enviado…", cuts: [] };
     jobs.set(id, job);
     pruneJobHistory();
     res.status(202).json({ jobId: id, status: job.status });
@@ -343,7 +349,7 @@ app.post("/api/upload", express.raw({ type: "application/octet-stream", limit: "
   }
 });
 
-app.post("/api/cuts", async (req, res) => {
+app.post("/api/cuts", requireAuth, async (req, res) => {
   const url = typeof req.body?.url === "string" ? req.body.url.trim() : "";
   if (!validVideoUrl(url)) return res.status(400).json({ error: "Cole um link válido do YouTube ou da Twitch." });
   if (req.body?.authorized !== true) return res.status(400).json({ error: "Confirme que você tem autorização para processar este vídeo." });
@@ -355,7 +361,7 @@ app.post("/api/cuts", async (req, res) => {
     activeJobs = Math.max(0, activeJobs - 1);
     return res.status(error.statusCode || 500).json({ error: error.message || "Não foi possível verificar o armazenamento." });
   }
-  const job = { id: randomUUID(), url, status: "queued", progress: 0, message: "Preparando processamento…", cuts: [] };
+  const job = { id: randomUUID(), ownerSub: req.user.sub, url, status: "queued", progress: 0, message: "Preparando processamento…", cuts: [] };
   jobs.set(job.id, job);
   pruneJobHistory();
   res.status(202).json({ jobId: job.id, status: job.status });
@@ -364,10 +370,27 @@ app.post("/api/cuts", async (req, res) => {
     .finally(() => { activeJobs = Math.max(0, activeJobs - 1); });
 });
 
-app.get("/api/jobs/:id", (req, res) => {
+app.get("/api/jobs/:id", requireAuth, (req, res) => {
   const job = jobs.get(req.params.id);
-  if (!job) return res.status(404).json({ error: "Processamento não encontrado. Envie o link novamente." });
+  if (!job || job.ownerSub !== req.user.sub) {
+    return res.status(404).json({ error: "Processamento não encontrado. Envie o link novamente." });
+  }
   res.json({ id: job.id, status: job.status, progress: job.progress || 0, message: job.message, cuts: job.cuts || [] });
+});
+
+app.get("/cuts/:jobId/:filename", requireAuth, (req, res) => {
+  const job = jobs.get(req.params.jobId);
+  if (!job || job.ownerSub !== req.user.sub) {
+    return res.status(404).json({ error: "Corte não encontrado." });
+  }
+  const allowed = (job.cuts || []).some(cut => cut.name === req.params.filename);
+  if (!allowed || !/^corte-[1-3]\\.mp4$/.test(req.params.filename)) {
+    return res.status(404).json({ error: "Corte não encontrado." });
+  }
+  res.setHeader("Cache-Control", "private, no-store");
+  res.sendFile(path.join(OUTPUT_DIR, job.id, req.params.filename), error => {
+    if (error && !res.headersSent) res.status(error.statusCode || 404).json({ error: "Corte não encontrado." });
+  });
 });
 
 await mkdir(OUTPUT_DIR, { recursive: true });
