@@ -130,7 +130,7 @@ async function createCuts(job) {
           "--extractor-retries", "3", "--retry-sleep", "http:2",
           "--remote-components", "ejs:github",
           "--js-runtimes", "node",
-          "--extractor-args", "youtube:player_client=mweb",
+          "--extractor-args", "youtube:player_client=default,mweb",
           "--extractor-args", "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416",
           "-f", "bv*+ba/b", "--merge-output-format", "mp4",
           "-o", inputPath, job.url
