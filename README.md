@@ -29,6 +29,17 @@ npm start
 
 Abra http://localhost:3000.
 
+## Login com Google (configuração ainda necessária)
+
+O MVP inclui as rotas de início e retorno OAuth e um cookie de sessão assinado. Para habilitar o login no Render, configure estas variáveis privadas no serviço:
+
+- `GOOGLE_CLIENT_ID`: ID do cliente OAuth criado no Google Cloud.
+- `GOOGLE_CLIENT_SECRET`: segredo do cliente OAuth; mantenha-o apenas nas variáveis privadas do servidor.
+- `GOOGLE_REDIRECT_URI`: URL completa de retorno, por exemplo `https://cortai-ai-teste.onrender.com/auth/google/callback`. O valor precisa ser idêntico ao URI autorizado no Google Cloud.
+- `SESSION_SECRET`: segredo aleatório longo e exclusivo para assinar a sessão.
+
+No Google Cloud, a origem JavaScript autorizada é `https://cortai-ai-teste.onrender.com`; o URI de redirecionamento autorizado deve ser `https://cortai-ai-teste.onrender.com/auth/google/callback` se esse for o endereço definitivo do serviço. Não crie credenciais até confirmar o domínio de produção/teste e configurar as variáveis. O login identifica o usuário, mas esta etapa ainda não restringe os endpoints de processamento nem separa os arquivos por usuário.
+
 ## Configuração de armazenamento
 Variáveis opcionais:
 - `PORT`: porta HTTP (padrão `3000`).
