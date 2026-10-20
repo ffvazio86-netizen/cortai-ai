@@ -136,13 +136,16 @@ async function createCuts(job) {
           "-o", inputPath, job.url
         ]);
       } catch (error) {
-        const details = error.message || "";
+        const details = [error.message || "", error.stderr || "", error.stdout || ""].join("\n");
         if (error.stderr) console.error("[Cort-AI] Diagnóstico yt-dlp:", error.stderr.slice(-12000));
         if (/HTTP Error 429|Too Many Requests/i.test(details)) {
           throw new Error("O YouTube limitou os downloads deste servidor (HTTP 429). Aguarde antes de tentar novamente. Se continuar, baixe o vídeo que você tem autorização para usar e envie o arquivo pelo formulário; o bloqueio por IP é controlado pelo YouTube e não pode ser removido apenas pelo Cort-AI.");
         }
         if (/HTTP Error 403|Forbidden|Unable to download API page|Sign in to confirm/i.test(details)) {
           throw new Error("O YouTube recusou o download (HTTP 403). Isso pode ocorrer por validação de segurança, formato indisponível ou restrição do servidor. O Cort-AI tentou usar IPv4 e o provedor de token PO Token; isso não garante que o YouTube permita o download. Se o erro persistir, envie um arquivo de vídeo que você tenha autorização para processar.");
+        }
+        if (/Failed to extract any player response|Unable to download webpage|Unable to download API page/i.test(details)) {
+          throw new Error("O YouTube não forneceu os dados do vídeo ao servidor do Cort-AI. O yt-dlp recebeu respostas de bloqueio ou limitação e não conseguiu continuar. Isso não é uma falha do FFmpeg. Tente novamente mais tarde ou envie diretamente um arquivo de vídeo que você tenha autorização para processar.");
         }
         throw error;
       }
