@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { execFileSync } from "node:child_process";
 import { createHmac } from "node:crypto";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { app, validVideoUrl } from "../server.js";
@@ -123,8 +123,9 @@ test("gera três arquivos MP4 reais a partir de um vídeo enviado", { timeout: 2
       headers: { "content-type": "application/octet-stream", cookie },
       body: bytes
     });
-    assert.equal(upload.status, 202, await upload.text());
-    const { jobId } = await upload.json();
+    const uploadData = await upload.json();
+    assert.equal(upload.status, 202, JSON.stringify(uploadData));
+    const { jobId } = uploadData;
     assert.ok(jobId);
 
     let status;
@@ -146,7 +147,7 @@ test("gera três arquivos MP4 reais a partir de um vídeo enviado", { timeout: 2
       const output = Buffer.from(await response.arrayBuffer());
       assert.ok(output.length > 10_000, `${cut.name} parece vazio`);
       const outputPath = path.join(temp, cut.name);
-      await import("node:fs/promises").then(fs => fs.writeFile(outputPath, output));
+      await writeFile(outputPath, output);
       const duration = Number(execFileSync("ffprobe", [
         "-v", "error", "-show_entries", "format=duration",
         "-of", "default=noprint_wrappers=1:nokey=1", outputPath
